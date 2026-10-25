@@ -1787,14 +1787,17 @@ document.addEventListener('submit', (e) => {
     case 'settings': {
       const s = D.settings;
       const before = JSON.stringify([s.morningTime, s.weeklyDay, s.weeklyTime]);
-      for (const k of ['name', 'buddyName', 'notionToken', 'dob', 'sex', 'maxHr', 'sleepBase', 'heightCm', 'bodyFat', 'leanKg', 'weightKg', 'activeStart', 'activeEnd', 'morningTime', 'journalTime', 'weeklyTime', 'calendarUrl', 'notionUrl', 'intervalsKey', 'intervalsAthlete']) if (fd.has(k)) s[k] = String(fd.get(k) || '').trim();
-      s.nudgeEveryHours = Number(fd.get('nudgeEveryHours')) || 2;
-      s.weeklyDay = Number(fd.get('weeklyDay')) || 0;
-      for (const k of ['remindersOn', 'sound', 'launchAtLogin', 'buddy']) s[k] = fd.get(k) === 'on';
+      // Only write what you changed on this form. A sync can update settings while the page is open,
+      // and saving the stale, older values would quietly undo it on every device.
+      const shown = UI.settingsForm || {}, now = formSnapshot(f);
+      const changed = (k) => k in now && (!(k in shown) || shown[k] !== now[k]);
+      for (const k of ['name', 'buddyName', 'notionToken', 'dob', 'sex', 'maxHr', 'sleepBase', 'heightCm', 'bodyFat', 'leanKg', 'weightKg', 'activeStart', 'activeEnd', 'morningTime', 'journalTime', 'weeklyTime', 'calendarUrl', 'notionUrl', 'intervalsKey', 'intervalsAthlete']) if (changed(k)) s[k] = String(fd.get(k) || '').trim();
+      if (changed('nudgeEveryHours')) s.nudgeEveryHours = Number(fd.get('nudgeEveryHours')) || 2;
+      if (changed('weeklyDay')) s.weeklyDay = Number(fd.get('weeklyDay')) || 0;
+      for (const k of ['remindersOn', 'sound', 'launchAtLogin', 'buddy', 'notionAuto']) if (changed(k)) s[k] = fd.get(k) === 'on';
       s.buddyName = s.buddyName || 'Mochi';
-      s.notionAuto = fd.get('notionAuto') === 'on';
-      if (f.querySelector('[name=ankiOn]')) { const was = s.ankiOn; s.ankiOn = fd.get('ankiOn') === 'on'; if (s.ankiOn && !was) setTimeout(() => syncAnki(true), 300); }
-      if (gEnabled()) for (const k of ['googleTasks', 'googleCalendar', 'googleCalendarRead']) s[k] = fd.get(k) === 'on';
+      if (changed('ankiOn')) { const was = s.ankiOn; s.ankiOn = fd.get('ankiOn') === 'on'; if (s.ankiOn && !was) setTimeout(() => syncAnki(true), 300); }
+      if (gEnabled()) for (const k of ['googleTasks', 'googleCalendar', 'googleCalendarRead']) if (changed(k)) s[k] = fd.get(k) === 'on';
       bridge.setLogin(s.launchAtLogin); save(); calCache.at = 0; loadCalendar(true); toast('Settings saved'); rerender();
       if (gEnabled() && D.sync.recurring && before !== JSON.stringify([s.morningTime, s.weeklyDay, s.weeklyTime])) setupRecurringEvents(false).then(() => toast('Calendar reminders moved to the new times')).catch(() => {});
       if (s.intervalsKey && !D.sync.intervalsAt) syncIntervals(true);
@@ -1802,6 +1805,9 @@ document.addEventListener('submit', (e) => {
     }
   }
 });
+
+// What a form shows right now, field by field (checkboxes as true/false)
+function formSnapshot(f) { const o = {}; for (const el of f.elements) if (el.name) o[el.name] = el.type === 'checkbox' ? el.checked : el.value; return o; }
 
 function stashJournalDraft() {
   const f = $('[data-form=journal]'); if (!f) return;
@@ -1953,7 +1959,7 @@ const AFTER = {
   review: (fresh) => { if (fresh) { UI.rate = (D.reviews[reviewKey()] || {}).rating || 0; Motion.countUp($('#view')); } },
   journal: (fresh) => { if (fresh) { const j = D.journal[UI.jdate || todayStr()] || {}; UI.mood = j.mood || 0; UI.wordBurst = wordCount(journalText(j)) >= 150; } },
   coach: () => { loadCalendar(); fitNotes(); },
-  settings: async () => { const img = $('#pairQr'); if (img && bridge.qr) { const url = await bridge.qr(pairingCode()); if (url) img.src = url; } }
+  settings: async () => { const f = $('[data-form=settings]'); if (f) UI.settingsForm = formSnapshot(f); const img = $('#pairQr'); if (img && bridge.qr) { const url = await bridge.qr(pairingCode()); if (url) img.src = url; } }
 };
 
 function migrate(d) {

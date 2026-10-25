@@ -32,7 +32,7 @@ function recordList(d) {
 }
 
 function sig(key, o) {
-  const c = { ...o }; delete c._u;
+  const c = { ...o }; delete c._u; delete c._f;
   TRANSIENT.forEach(f => delete c[f]);
   if (key === 'settings') DEVICE_KEYS.forEach(f => delete c[f]);
   if (key.startsWith('r:') && Array.isArray(c.priorities)) c.priorities = c.priorities.map(p => { const q = { ...p }; TRANSIENT.forEach(f => delete q[f]); return q; });
@@ -51,11 +51,35 @@ function stampAll(d) {
   for (const [k, o] of recordList(d)) {
     seen.add(k);
     const s = sig(k, o);
-    if (stampCache.get(k) !== s) { o._u = now; stampCache.set(k, s); changed = true; }
+    if (stampCache.get(k) !== s) { if (k === 'settings') stampFields(o, stampCache.get(k), now); o._u = now; stampCache.set(k, s); changed = true; }
   }
   for (const k of [...stampCache.keys()]) if (!seen.has(k)) { d.tomb = d.tomb || {}; d.tomb[k] = now; stampCache.delete(k); changed = true; }
   if (changed) { CLOUD.dirty = true; scheduleCloud(); }
   return changed;
+}
+
+// Settings carry an edit time per field (_f), so changing one setting on one device never resets the others.
+function stampFields(o, prevSig, now) {
+  const prev = prevSig ? JSON.parse(prevSig) : null; if (!prev) return;
+  o._f = { ...(o._f || {}) };
+  for (const f of new Set([...Object.keys(prev), ...Object.keys(o)])) {
+    if (f === '_u' || f === '_f' || DEVICE_KEYS.includes(f)) continue;
+    if (JSON.stringify(prev[f]) !== JSON.stringify(o[f])) o._f[f] = now;
+  }
+}
+// Field by field, the newest edit wins. A record from an older version (no _f) counts every field as edited
+// when the record was; in a record that tracks fields, a field without a time has not been edited since.
+function mergeSettings(a, b) {
+  if (!a || !b) return a || b;
+  const fa = a._f || {}, fb = b._f || {}, out = { ...a, _f: { ...fa } };
+  const when = (o, fs, f) => fs[f] || (o._f ? 0 : o._u || 0);
+  for (const f of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (f === '_u' || f === '_f') continue;
+    const ta = when(a, fa, f), tb = when(b, fb, f);
+    if (tb > ta) { out[f] = b[f]; if (fb[f]) out._f[f] = fb[f]; }
+  }
+  out._u = Math.max(a._u || 0, b._u || 0);
+  return out;
 }
 
 function mergeData(L, Rraw) {
@@ -68,6 +92,12 @@ function mergeData(L, Rraw) {
   let changed = false, needPush = false;
   for (const k of new Set([...lm.keys(), ...rm.keys()])) {
     const a = lm.get(k), b = rm.get(k);
+    if (k === 'settings') {
+      const w = mergeSettings(a, b), same = (x) => x && sig(k, x) === sig(k, w) && JSON.stringify(x._f || {}) === JSON.stringify(w._f || {});
+      if (!same(a)) changed = true;
+      if (!same(b)) needPush = true;
+      win.set(k, w); continue;
+    }
     let w = !b ? a : !a ? b : ((b._u || 0) > (a._u || 0) ? b : a);
     if (tomb[k] && tomb[k] >= (w._u || 0)) { if (a) changed = true; if (b) needPush = true; continue; }
     if (w === b) {
@@ -198,7 +228,7 @@ function pairedSettings(remote, local) {
   const def = defaults().settings, same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const [first, second] = (local._u || 0) > (remote._u || 0) ? [local, remote] : [remote, local];
   const out = { ...first };
-  for (const [k, v] of Object.entries(second)) if (k !== '_u' && same(first[k], def[k]) && !same(v, def[k])) out[k] = v;
+  for (const [k, v] of Object.entries(second)) if (k !== '_u' && k !== '_f' && same(first[k], def[k]) && !same(v, def[k])) out[k] = v;
   DEVICE_KEYS.forEach(k => { out[k] = local[k]; });
   return out;
 }
@@ -219,7 +249,10 @@ async function pairWith(code) {
     LOCAL_ONLY.forEach(k => { D[k] = local[k] !== undefined ? local[k] : defaults()[k]; });
     D.settings = pairedSettings(remote.settings, local.settings);
   }
-  D.settings.googleUrl = o.u; D.settings.googleKey = o.k; D.settings.onboarded = true; D.settings._u = Date.now();
+  D.settings.googleUrl = o.u; D.settings.googleKey = o.k; D.settings.onboarded = true;
+  // The combined settings are what every device should now have, field by field
+  const now = Date.now(); D.settings._u = now; D.settings._f = {};
+  for (const k of Object.keys(D.settings)) if (k !== '_u' && k !== '_f' && !DEVICE_KEYS.includes(k)) D.settings._f[k] = now;
   D.sync = { ...(D.sync || {}), cloudRev: g.rev };
   primeStamps(D); CLOUD.dirty = true; CLOUD.needsUpdate = false;
   // Targets made on the phone before pairing are not in Google Tasks yet
