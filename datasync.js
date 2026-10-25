@@ -223,12 +223,18 @@ function readPairingCode(code) {
   return o;
 }
 
-// Settings when pairing: the side edited last goes first, then anything it left at the default but the other side changed.
-function pairedSettings(remote, local) {
+// Settings when pairing: the shared copy wins, because this device may hold an old copy of it (an edit time says
+// nothing about which values are current). This device only fills in what the shared copy leaves at the default,
+// and only those fields get a fresh edit time, so the other devices take them without resetting anything else.
+function pairedSettings(remote, local, now) {
   const def = defaults().settings, same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  const [first, second] = (local._u || 0) > (remote._u || 0) ? [local, remote] : [remote, local];
-  const out = { ...first };
-  for (const [k, v] of Object.entries(second)) if (k !== '_u' && k !== '_f' && same(first[k], def[k]) && !same(v, def[k])) out[k] = v;
+  const out = { ...remote, _f: { ...(remote._f || {}) } };
+  // A shared copy from an older version has no field times: each field counts as edited when the record was
+  if (!remote._f) for (const k of Object.keys(remote)) if (k !== '_u' && k !== '_f' && !DEVICE_KEYS.includes(k) && remote._u) out._f[k] = remote._u;
+  for (const [k, v] of Object.entries(local)) {
+    if (k === '_u' || k === '_f' || DEVICE_KEYS.includes(k)) continue;
+    if (same(remote[k], def[k]) && !same(v, def[k])) { out[k] = v; out._f[k] = now; }
+  }
   DEVICE_KEYS.forEach(k => { out[k] = local[k]; });
   return out;
 }
@@ -241,18 +247,15 @@ async function pairWith(code) {
   let g;
   try { g = await gCall('data.get', { since: 0 }); }
   catch (e) { D.settings.googleUrl = prev.url; D.settings.googleKey = prev.key; if (/Unknown action: data/.test(e.message)) throw new Error('Your Google script needs the update first. On the laptop, open Settings › Your phone and follow the steps.'); throw e; }
-  const local = D;
+  const local = D, now = Date.now();
   if (g.data) {
     // The laptop's copy goes first, so a record neither side has edited since syncing keeps the laptop's version.
     const remote = migrate(g.data);
     D = mergeData(remote, local).data;
     LOCAL_ONLY.forEach(k => { D[k] = local[k] !== undefined ? local[k] : defaults()[k]; });
-    D.settings = pairedSettings(remote.settings, local.settings);
+    D.settings = pairedSettings(remote.settings, local.settings, now);
   }
-  D.settings.googleUrl = o.u; D.settings.googleKey = o.k; D.settings.onboarded = true;
-  // The combined settings are what every device should now have, field by field
-  const now = Date.now(); D.settings._u = now; D.settings._f = {};
-  for (const k of Object.keys(D.settings)) if (k !== '_u' && k !== '_f' && !DEVICE_KEYS.includes(k)) D.settings._f[k] = now;
+  D.settings.googleUrl = o.u; D.settings.googleKey = o.k; D.settings.onboarded = true; D.settings._u = now;
   D.sync = { ...(D.sync || {}), cloudRev: g.rev };
   primeStamps(D); CLOUD.dirty = true; CLOUD.needsUpdate = false;
   // Targets made on the phone before pairing are not in Google Tasks yet
