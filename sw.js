@@ -1,6 +1,6 @@
 // Ascend web app: keeps working offline. Always tries the network first so updates arrive,
 // and falls back to the last copy when there is no connection. Google and other services are never cached.
-const CACHE = 'ascend-1.3.5';
+const CACHE = 'ascend-1.3.6';
 self.addEventListener('install', (e) => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', 'index.html', 'popup.html']))); });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));

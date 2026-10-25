@@ -27,9 +27,11 @@ function out_(o) {
 
 function handle_(b) {
   switch (b.action) {
-    case 'ping': return { version: 3, email: Session.getEffectiveUser().getEmail(), list: !!listId_(), calendar: CalendarApp.getDefaultCalendar().getName() };
+    case 'ping': return { version: 4, email: Session.getEffectiveUser().getEmail(), list: !!listId_(), calendar: CalendarApp.getDefaultCalendar().getName() };
     case 'data.get': return dataGet_(b.since);
     case 'data.put': return dataPut_(b.baseRev, b.data);
+    case 'health.export': return healthExport_(b.days);
+    case 'health.done': return healthDone_(b.upTo);
     case 'events': return events_(b.from, b.to);
     case 'tasks.pull': return pullTasks_();
     case 'tasks.upsert': return upsertTask_(b.task);
@@ -80,6 +82,49 @@ function dataPut_(baseRev, data) {
     props.setProperty('DATA_REV', String(rev));
     return { rev: rev };
   } finally { lock.releaseLock(); }
+}
+
+// ----- Apple Health: a Shortcut on your iPad fetches finished days and logs them in the Health app -----
+// Only days the phone has fully read are sent, and each day once: the Shortcut calls health.done when it has logged them.
+function healthExport_(days) {
+  var text = dataFile_().getBlob().getDataAsString(), d = text ? JSON.parse(text) : {};
+  var tz = Session.getScriptTimeZone(), today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  var hc = d.hc || {}, hcDays = hc.days || {}, well = d.wellness || {};
+  var end = hc.at ? Utilities.formatDate(new Date(hc.at), tz, 'yyyy-MM-dd') : today;
+  if (end > today) end = today;
+  var done = PropertiesService.getScriptProperties().getProperty('HEALTH_DONE') || '';
+  var first = shiftDay_(end, -Math.min(Math.max(Number(days) || 14, 1), 60));
+  if (done >= first) first = shiftDay_(done, 1);
+  var out = { steps: [], restingHR: [], weight: [], vo2max: [], sleep: [], upTo: '' };
+  function add(list, a, b, at, digits) {
+    var v = a != null ? Number(a) : b != null ? Number(b) : NaN;
+    if (v > 0) list.push({ date: at, value: Math.round(v * digits) / digits });
+  }
+  for (var day = first; day < end; day = shiftDay_(day, 1)) {
+    var w = well[day] || {}, h = hcDays[day] || {}, at = day + ' 12:00';
+    add(out.steps, w.steps, h.steps, at, 1);
+    add(out.restingHR, w.restingHR, h.rhr, at, 1);
+    add(out.weight, w.weight, h.weight, at, 10);
+    add(out.vo2max, w.vo2max, h.vo2, at, 10);
+    out.upTo = day;
+  }
+  (hc.sleep || []).forEach(function (s) {
+    var woke = String(s.end).slice(0, 10);
+    if (s.nap || woke < first || woke >= end) return;
+    out.sleep.push({ start: String(s.start).slice(0, 16).replace('T', ' '), end: String(s.end).slice(0, 16).replace('T', ' ') });
+  });
+  return out;
+}
+
+function healthDone_(upTo) {
+  var props = PropertiesService.getScriptProperties(), done = props.getProperty('HEALTH_DONE') || '';
+  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(upTo || '') && upTo > done) { done = upTo; props.setProperty('HEALTH_DONE', done); }
+  return { done: done };
+}
+
+function shiftDay_(day, n) {
+  var t = new Date(day + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + n);
+  return t.toISOString().slice(0, 10);
 }
 
 // ----- Google Sheets: your revision timetable, one tab per subject -----

@@ -410,7 +410,42 @@ function healthPanels() {
     ${hcHere() ? `<div class="row wrap">${st && st.available === false ? `<p class="muted" style="font-size:12.5px">${st.needsInstall ? 'Install or update the Health Connect app from the Play Store first.' : 'Health Connect is not available on this phone.'}</p>` : `<button type="button" class="btn ${s.hcOn ? '' : 'primary'} sm" data-act="hc-connect">${icon('heart')}${s.hcOn ? 'Check permissions' : 'Connect Health Connect'}</button>`}
       ${st && st.total ? `<span class="muted" style="font-size:12.5px">${st.granted}/${st.total} data types allowed</span>` : ''}${HCSYNC.error ? `<span style="font-size:12.5px;color:var(--off)">${esc(HCSYNC.error)}</span>` : ''}</div>
       <p class="hint muted" style="font-size:12px;margin-top:8px">In the Zepp app: Profile › Add accounts (or Health data) › Health Connect, and allow everything. Then connect here.</p>` : ''}
-  </section>`;
+  </section>${hcHere() ? '' : appleHealthPanel()}`;
+}
+
+// Apple Health on the iPad: Ascend's web app cannot write to Health, so an iOS Shortcut fetches finished days from the Google script
+function appleHealthPanel() {
+  const g = !!(D.settings.googleUrl && D.settings.googleKey);
+  const head = `<div class="conn-head"><span class="conn-ic hc">${icon('heart')}</span><div class="grow"><h3>Apple Health on your iPad</h3><p class="muted" style="font-size:12.5px">Each morning a Shortcut copies your finished days into the Health app: steps, resting heart rate, weight, VO₂ max and sleep.</p></div></div>`;
+  if (!g) return `<section class="panel conn">${head}<p class="muted">Connect Google first. The Shortcut reads your data through the same Google script.</p></section>`;
+  const script = `<ol class="setup-steps">
+      <li><button type="button" class="btn primary sm" data-act="copy-script">${icon('copy')}Copy the new script</button></li>
+      <li>Open <button type="button" class="btn sm" data-act="open-scripts">${icon('external')}script.google.com</button> and click your <b>Ascend bridge</b> project.</li>
+      <li>Select all the code (<kbd>Ctrl</kbd> <kbd>A</kbd>), paste (<kbd>Ctrl</kbd> <kbd>V</kbd>) and save (<kbd>Ctrl</kbd> <kbd>S</kbd>).</li>
+      <li>Click <b>Deploy</b> › <b>Manage deployments</b> › pencil icon › Version: <b>New version</b> › <b>Deploy</b>. Your web app link stays the same.</li>
+    </ol>`;
+  if (!window.ASCEND_WEB) return `<section class="panel conn">${head}<p style="font-size:13px"><b>On this laptop, once:</b> update your Google script.</p>${script}
+    <p class="muted" style="font-size:12.5px;margin-top:8px">Then open Ascend on the iPad, go to Settings › Apple Health and build the Shortcut.</p></section>`;
+  const f = (k) => `<code>${k}</code>`;
+  return `<section class="panel conn">${head}
+    <p class="muted" style="font-size:12.5px">Update your Google script from Ascend on the laptop first (Settings › Apple Health). Then build the Shortcut here in the <b>Shortcuts</b> app:</p>
+    <div class="row wrap" style="margin:8px 0"><button type="button" class="btn sm" data-act="ah-copy-url">${icon('copy')}Copy web app link</button><button type="button" class="btn sm" data-act="ah-copy-key">${icon('copy')}Copy key</button></div>
+    <details><summary style="cursor:pointer;font-weight:600;font-size:13px">Step by step</summary>
+    <ol class="setup-steps" style="font-size:13px">
+      <li>Tap <b>+</b> to make a new shortcut and name it <b>Ascend to Health</b>.</li>
+      <li>Add <b>Get Contents of URL</b>. Paste the web app link as the URL. Tap the arrow: Method <b>POST</b>, Request Body <b>JSON</b>. Add two <b>Text</b> fields: ${f('key')} = paste your key, and ${f('action')} = ${f('health.export')}.</li>
+      <li>Add <b>Get Dictionary Value</b>: Get <b>Value</b> for ${f('steps')} in <b>Contents of URL</b>.</li>
+      <li>Add <b>Repeat with Each</b> item in that Dictionary Value. Inside the repeat add:
+        <ul><li><b>Get Dictionary Value</b>: Value for ${f('value')} in <b>Repeat Item</b></li>
+        <li><b>Get Dictionary Value</b>: Value for ${f('date')} in <b>Repeat Item</b> (tap the input and pick Repeat Item)</li>
+        <li><b>Log Health Sample</b>: Type <b>Steps</b>, Value = the first Dictionary Value, Date = the second one.</li></ul></li>
+      <li>Long-press the steps 3 and 4 blocks, <b>Duplicate</b> them and change ${f('steps')} and the Type for: ${f('restingHR')} › Resting Heart Rate, ${f('weight')} › Weight (kg), ${f('vo2max')} › VO₂ Max.</li>
+      <li>Sleep: one more block for ${f('sleep')}. Inside the repeat, get ${f('start')} and ${f('end')} instead, and log <b>Sleep Analysis</b> as <b>Asleep</b> with Start Date and End Date.</li>
+      <li>At the end add <b>Get Dictionary Value</b>: Value for ${f('upTo')} in the first <b>Contents of URL</b>. Then another <b>Get Contents of URL</b> like step 2, with ${f('action')} = ${f('health.done')} and a third Text field ${f('upTo')} = that Dictionary Value. This marks the days as done, so nothing is logged twice.</li>
+      <li>Run it once and allow Health access when asked. The first run copies the last 2 weeks.</li>
+      <li><b>Automation</b> tab › <b>+</b> › <b>Time of Day</b>, 9:00, Daily › <b>Run Immediately</b> › pick Ascend to Health.</li>
+    </ol></details>
+    <p class="muted" style="font-size:12px;margin-top:8px">Only days your phone has fully read are sent, so yesterday shows up once Ascend on the phone has synced this morning. HRV is left out: Apple Health stores a different kind of HRV (SDNN) than your watch measures.</p></section>`;
 }
 
 // ---------- Events ----------
@@ -420,6 +455,8 @@ document.addEventListener('click', async (e) => {
   const a = e.target.closest('[data-act]'); if (!a) return;
   switch (a.dataset.act) {
     case 'hc-sync': a.classList.add('busy'); await syncHealth(true); a.classList.remove('busy'); break;
+    case 'ah-copy-url': await bridge.copy(D.settings.googleUrl); toast('Web app link copied'); break;
+    case 'ah-copy-key': await bridge.copy(D.settings.googleKey); toast('Key copied. Keep it private: it unlocks your Ascend data.'); break;
     case 'hc-connect': {
       a.classList.add('busy');
       try {
