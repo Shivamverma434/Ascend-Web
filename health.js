@@ -44,6 +44,7 @@ async function syncHealth(manual = false) {
     hc.exercise = [...(hc.exercise || []).filter(e => e.date < from), ...(r.exercise || [])].filter(e => e.date >= keep);
     for (const k of Object.keys(hc.days)) if (k < keep) delete hc.days[k];
     hc.at = Date.now(); D.hc = hc; HCSYNC.error = '';
+    if (typeof importHcWorkouts === 'function') importHcWorkouts();
     save();
     if (['health', 'fitness', 'today'].includes(currentView) && !$('.scrim')) rerender();
     if (manual) toast(`Health Connect: ${Object.keys(r.days || {}).length} days, ${(r.sleep || []).length} nights read`);
@@ -346,7 +347,7 @@ const fy = (y) => (y === 0 ? '0' : (y < 0 ? '−' : '+') + Math.abs(y)) + ' yrs'
 const shortDate = (d) => parseDay(d).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
 
 // ---------- Healthspan view ----------
-function viewHealth() {
+function viewHealth(tabs = '') {
   const a = ascendAge(), pc = paceOfAging(), m = a ? a.metrics : bodyMetrics();
   const hasDob = !!ageYears(), nights = validNights(addDays(todayStr(), -1));
   const prev = a && snapshots().slice(-2, -1)[0];
@@ -363,8 +364,8 @@ function viewHealth() {
   const spark = hist.length >= 2 ? (() => { const ys = hist.map(p => p[1]); const lo = Math.min(...ys) - .3, hi = Math.max(...ys) + .3; const W = 220, H = 54; return `<svg class="spark" viewBox="0 0 ${W} ${H}"><path d="${hist.map((p, i) => `${i ? 'L' : 'M'}${(i / (hist.length - 1) * W).toFixed(1)} ${(H - 4 - (p[1] - lo) / (hi - lo) * (H - 8)).toFixed(1)}`).join(' ')}" fill="none" stroke="#FFE08A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`; })() : '';
   const maxY = a ? Math.max(1, ...a.factors.map(f => Math.abs(f.years))) : 1;
   return `
-  <div class="view-head"><div><h1>Healthspan</h1><p class="sub">Your biological age from up to 6 months of sleep, fitness and activity. Updated weekly · next update ${shortDate(nextUpdate())}.</p></div>
-    ${ASCEND_IS_MOBILE && D.settings.hcOn ? `<button class="btn ghost" data-act="hc-sync">${icon('sync', 'class="' + (HCSYNC.busy ? 'spinning' : '') + '"')}Sync</button>` : ''}</div>
+  <div class="view-head"><div><h1>Health</h1><p class="sub">Your biological age from up to 6 months of sleep, fitness and activity. Updated weekly · next update ${shortDate(nextUpdate())}.</p></div>
+    <div class="row wrap">${tabs}${ASCEND_IS_MOBILE && D.settings.hcOn ? `<button class="btn ghost" data-act="hc-sync">${icon('sync', 'class="' + (HCSYNC.busy ? 'spinning' : '') + '"')}Sync</button>` : ''}</div></div>
   ${!hasDob ? `<div class="carry"><p><b>Add your date of birth</b> to see your Ascend Age. Until then you see how many years your habits add or take away.</p><button class="btn sm" data-act="health-profile">Add it</button></div>` : ''}
   ${a ? `<section class="age-hero">
     <div class="age-main"><span class="eyebrow">Ascend Age</span><div class="age-num"><b data-count="${a.bio ?? Math.abs(a.offset)}" data-fmt="dec">${a.bio ?? Math.abs(a.offset)}</b>${a.bio == null ? '<small>years</small>' : ''}<small class="age-pm">±${a.pm}</small></div>
@@ -388,7 +389,7 @@ function viewHealth() {
 
 function healthTodayCard() {
   const a = ascendAge(); if (!a) return '';
-  return `<section class="panel age-card" data-go="health"><div class="row" style="justify-content:space-between"><h3>${icon('heart', 'style="width:16px;height:16px;color:var(--pink);vertical-align:-2px"')} Ascend Age</h3><b class="age-mini">${a.bio ?? (a.offset > 0 ? '+' : '') + a.offset}</b></div>
+  return `<section class="panel age-card" data-go="healthspan"><div class="row" style="justify-content:space-between"><h3>${icon('heart', 'style="width:16px;height:16px;color:var(--pink);vertical-align:-2px"')} Ascend Age</h3><b class="age-mini">${a.bio ?? (a.offset > 0 ? '+' : '') + a.offset}</b></div>
     <p class="muted" style="font-size:13px;margin-top:4px">${a.offset < 0 ? `${Math.abs(a.offset)} years younger than your age` : a.offset > 0 ? `${a.offset} years older than your age` : 'Right at your age'} · tap for your biggest opportunity</p></section>`;
 }
 

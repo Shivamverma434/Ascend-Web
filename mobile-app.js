@@ -2,8 +2,8 @@
    Bottom tab bar, pairing with the laptop, real Android notifications, back button, haptics. */
 'use strict';
 
-const TABS = [['today', 'Today'], ['focus', 'Focus'], ['journal', 'Journal'], ['fitness', 'Fitness']];
-const MORE = [['health', 'Healthspan', 'Ascend Age and Pace of Aging'], ['exams', 'Exams', 'Countdown and spaced revision'], ['goals', 'Goals', 'Goals, habits and life balance'], ['people', 'People', 'Keep in touch with those who matter'], ['review', 'Weekly review', 'Close the week, set priorities'], ['coach', 'Coach', 'Plan, review and pep talks with Claude'], ['settings', 'Settings', 'Reminders, connections, pairing']];
+const TABS = [['today', 'Today'], ['journal', 'Journal'], ['health', 'Health'], ['goals', 'Goals']];
+const MORE = [['exams', 'Exams', 'Countdown and spaced revision'], ['coach', 'Coach', 'Plan, review and pep talks with Claude'], ['settings', 'Settings', 'Reminders, connections, backups, pairing']];
 let tabX = null;
 
 // ---------- Bottom tab bar ----------
@@ -11,8 +11,8 @@ window.renderNav = function () {
   const inMore = MORE.some(([id]) => id === currentView);
   const nav = $('#nav');
   nav.innerHTML = `<span class="nav-ind" id="navInd"></span>` +
-    TABS.map(([id, label]) => `<button data-go="${id}" class="${currentView === id ? 'active' : ''}">${icon(id)}<span>${label}</span></button>`).join('') +
-    `<button data-act="more-sheet" class="${inMore ? 'active' : ''}">${icon('more')}<span>More</span>${new Date().getDay() === Number(D.settings.weeklyDay) && !reviewedThisWeek() ? '<i class="nav-dot"></i>' : ''}</button>`;
+    TABS.map(([id, label]) => `<button data-go="${id}" class="${navOn(id) ? 'active' : ''}">${icon(id)}<span>${label}</span>${id === 'journal' && new Date().getDay() === Number(D.settings.weeklyDay) && !reviewedThisWeek() ? '<i class="nav-dot"></i>' : ''}</button>`).join('') +
+    `<button data-act="more-sheet" class="${inMore ? 'active' : ''}">${icon('more')}<span>More</span></button>`;
   const act = $('button.active', nav), ind = $('#navInd');
   if (act && ind) {
     const x = act.offsetLeft; ind.style.width = act.offsetWidth + 'px';
@@ -117,6 +117,8 @@ async function planNotifications() {
     const jt = at(s.journalTime);
     if (jt > now && !(i === 0 && D.journal[d] && D.journal[d].saved)) list.push({ id: 2000 + i, title: 'Before the day disappears ✍️', body: thoughtFor('evening', daySeed(d)) + ' Two minutes in your journal.', at: jt, extra: { kind: 'journal', view: 'journal' } });
     if (parseDay(d).getDay() === Number(s.weeklyDay)) { const wt = at(s.weeklyTime); if (wt > now && !(i === 0 && reviewedThisWeek())) list.push({ id: 3000 + i, title: 'Weekly review 📅', body: 'Was this week spent on what matters most? Ten honest minutes, then set next week\'s top 3.', at: wt, extra: { kind: 'weekly', view: 'review' } }); }
+    const lead = Number(s.bedLead ?? 30), bt = bedtimeAt(d);
+    if (lead > 0 && bt > now) { const tx = bedtimeText(); list.push({ id: 5000 + i, title: 'Bedtime 🌙', body: tx.title + ' ' + tx.body.replace(/ Last night.*$/, ''), at: bt, extra: { kind: 'bedtime', view: 'today' } }); }
     if (i < 3) {
       const every = (Number(s.nudgeEveryHours) || 2) * 3600e3, end = at(s.activeEnd);
       let t = new Date(+at(s.activeStart) + every), k = 0;

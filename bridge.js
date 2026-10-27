@@ -20,10 +20,42 @@
     try {
       const old = localStorage.getItem(KEY);
       if (old) localStorage.setItem(KEY + '.bak', old);
-      localStorage.setItem(KEY, JSON.stringify(d));
+      const text = JSON.stringify(d);
+      localStorage.setItem(KEY, text);
+      dailyBackup(text);
     } catch (e) { console.error('save failed', e); }
     return true;
   }
+
+  // ---------- Backups: the first save of each day, kept 7 days in this browser's IndexedDB ----------
+  const BACKUP_NAME = /^ascend-(\d{4}-\d{2}-\d{2}|before-restore)\.json$/;
+  let dbp = null;
+  const db = () => dbp || (dbp = new Promise((res, rej) => { const r = indexedDB.open('ascend-backups', 1); r.onupgradeneeded = () => r.result.createObjectStore('b'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }));
+  const store = async (mode, fn) => { const d = await db(); return new Promise((res, rej) => { const tx = d.transaction('b', mode); const out = fn(tx.objectStore('b')); tx.oncomplete = () => res(out && 'result' in out ? out.result : undefined); tx.onerror = () => rej(tx.error); }); };
+  const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  let backedUp = '';
+  async function dailyBackup(text) {
+    const name = `ascend-${localDay()}.json`; if (backedUp === name) return;
+    backedUp = name;
+    try {
+      const names = await store('readonly', s => s.getAllKeys());
+      if (names.includes(name)) return;
+      await store('readwrite', s => s.put({ text, at: Date.now() }, name));
+      const old = names.filter(n => /^ascend-\d/.test(n)).sort();
+      while (old.length >= 7) { const n = old.shift(); await store('readwrite', s => s.delete(n)); }
+    } catch (e) { console.error('backup failed', e); }
+  }
+  const backups = {
+    list: async () => {
+      try {
+        const names = (await store('readonly', s => s.getAllKeys())).filter(n => BACKUP_NAME.test(n)), out = [];
+        for (const name of names) { const v = await store('readonly', s => s.get(name)); if (v) out.push({ name, at: v.at, size: v.text.length }); }
+        return out.sort((a, b) => b.at - a.at);
+      } catch { return []; }
+    },
+    read: async (name) => { try { const v = await store('readonly', s => s.get(name)); return v ? JSON.parse(v.text) : null; } catch { return null; } },
+    keep: async (data) => { await store('readwrite', s => s.put({ text: JSON.stringify(data), at: Date.now() }, 'ascend-before-restore.json')); return true; }
+  };
 
   // ---------- Network ----------
   async function google(url, body) {
@@ -115,8 +147,8 @@
     closePopup: async () => closePopup(),
     popupAction: async (a) => runAction(a),
     setLogin: async () => {},
-    info: async () => ({ version: '1.4.0', platform: 'web' }),
-    google, intervals, notion, web,
+    info: async () => ({ version: '1.5.0', platform: 'web' }),
+    google, intervals, notion, web, backups,
     anki: async () => ({ error: 'Anki is read on your laptop and synced here.' }),
     trayStatus: async () => {},
     // A web app on iPad cannot schedule reminders, so these quietly do nothing

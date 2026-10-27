@@ -212,7 +212,7 @@ function defaults() {
     version: 2,
     settings: {
       name: '', activeStart: '08:00', activeEnd: '22:00', nudgeEveryHours: 2, morningTime: '08:30', journalTime: '21:30',
-      weeklyDay: 0, weeklyTime: '10:00', journalMode: 'quick',
+      weeklyDay: 0, weeklyTime: '10:00', journalMode: 'quick', bedTime: '00:30', bedLead: 30,
       notionUrl: '', calendarUrl: '', remindersOn: true, launchAtLogin: true, sound: true, onboarded: false, focusDefault: 25,
       googleUrl: '', googleKey: '', googleTasks: true, googleCalendar: true, googleCalendarRead: true,
       intervalsKey: '', intervalsAthlete: '0', buddy: true, buddyName: 'Mochi', ankiOn: false, notionToken: '', notionAuto: true, dob: '', sex: 'male', maxHr: '', sleepBase: 7.5, heightCm: '', bodyFat: '', leanKg: '', weightKg: '', hcOn: false, chessSite: 'chess.com', chessUser: '', goodreadsUrl: ''
@@ -382,11 +382,15 @@ function weekStats(from, to) {
 }
 
 // ---------- Shell & navigation ----------
-const NAV = [['today', 'Today'], ['focus', 'Focus'], ['exams', 'Exams'], ['goals', 'Goals'], ['people', 'People'], ['fitness', 'Fitness'], ['health', 'Healthspan'], ['journal', 'Journal'], ['review', 'Review'], ['coach', 'Coach'], ['settings', 'Settings']];
+const NAV = [['today', 'Today'], ['exams', 'Exams'], ['goals', 'Goals'], ['health', 'Health'], ['journal', 'Journal'], ['coach', 'Coach'], ['settings', 'Settings']];
+// Screens that live inside a tab: go('fitness') opens Health on its training page, and so on
+const VIEW_ALIAS = { fitness: ['health', 'htab', 'train'], healthspan: ['health', 'htab', 'span'], review: ['journal', 'jtab', 'review'], people: ['goals', 'gtab', 'people'] };
+const NAV_PARENT = { focus: 'today' };
+const navOn = (id) => currentView === id || NAV_PARENT[currentView] === id;
 
 function renderNav() {
   const nav = $('#nav');
-  nav.innerHTML = `<span class="nav-ind" id="navInd"></span>` + NAV.map(([id, label]) => `<button data-go="${id}" class="${currentView === id ? 'active' : ''}">${icon(id)}<span>${label}</span>${id === 'review' && !reviewedThisWeek() && new Date().getDay() === Number(D.settings.weeklyDay) ? '<i class="nav-dot"></i>' : ''}</button>`).join('');
+  nav.innerHTML = `<span class="nav-ind" id="navInd"></span>` + NAV.map(([id, label]) => `<button data-go="${id}" class="${navOn(id) ? 'active' : ''}">${icon(id)}<span>${label}</span>${id === 'journal' && !reviewedThisWeek() && new Date().getDay() === Number(D.settings.weeklyDay) ? '<i class="nav-dot"></i>' : ''}</button>`).join('');
   // Slide the white pill from the previous item to the new one
   const act = $('button.active', nav), ind = $('#navInd');
   if (act && ind) {
@@ -410,6 +414,7 @@ function renderNav() {
 function go(view, opts = {}) {
   if (view === 'checkin') { go('today'); setTimeout(openCheckin, 250); return; }
   if (view && view.startsWith('coach:')) { coachPick = view.split(':')[1]; view = 'coach'; }
+  if (VIEW_ALIAS[view]) { const [v, k, tab] = VIEW_ALIAS[view]; UI[k] = tab; view = v; }
   if (view !== currentView) { UI.jdate = null; UI.jopen = null; UI.allWorkouts = false; UI.noteLimit = 10; }
   currentView = VIEWS[view] ? view : 'today';
   renderNav();
@@ -544,6 +549,8 @@ function viewToday() {
     </section>
 
     <div class="grid" style="align-content:start">
+      ${focusTodayCard()}
+      ${typeof insightTodayCard === 'function' ? insightTodayCard() : ''}
       ${pr ? `<section class="panel prio">
         <div class="panel-head"><h3>${icon('compass', 'style="width:16px;height:16px;color:var(--violet);vertical-align:-2px"')} This week's priorities</h3><span class="muted" style="font-size:12px">${pr.priorities.filter(p => p.done).length}/${pr.priorities.length}</span></div>
         ${pr.priorities.map(p => `<div class="target ${p.done ? 'done' : ''}" data-pid="${p.id}"><button class="check" data-act="toggle-prio" aria-label="Mark done">${icon('check', 'stroke-width="3"')}</button><span class="t-title">${esc(p.title)}</span></div>`).join('')}
@@ -564,6 +571,19 @@ function viewToday() {
       </section>
     </div>
   </div>`;
+}
+
+// Focus lives on Today: a live countdown while a session runs, otherwise one tap to start
+function focusTodayCard() {
+  const a = D.activeSession, t = todayStr(), fmin = focusMinOn(t), n = sessionsOn(t).length;
+  if (a) return `<section class="panel focus-card on" data-go="focus"><div class="row" style="justify-content:space-between"><h3>${icon('focus', 'class="spin-slow" style="width:16px;height:16px;color:var(--ember);vertical-align:-2px"')} ${a.pausedAt ? 'Paused' : 'Focusing'}</h3><b class="fc-clock" id="tdTimer">${fmtClock(Math.max(0, a.planned * 60 - sessionElapsed(a)))}</b></div>
+    <p class="muted" style="font-size:13px">${esc(a.task || 'Focus session')} · tap to open the timer</p></section>`;
+  const p = D.settings.focusDefault || 25;
+  return `<section class="panel focus-card"><div class="panel-head"><h3>${icon('focus', 'style="width:16px;height:16px;color:var(--ember);vertical-align:-2px"')} Focus</h3><span class="muted" style="font-size:12px">${fmtMin(fmin)} today${n ? ` · ${n} session${n === 1 ? '' : 's'}` : ''}</span></div>
+    <form data-form="start-focus" class="fc-form"><input class="input grow" name="task" placeholder="What will you focus on?" maxlength="120" autocomplete="off">
+      <select class="input" name="custom" style="width:92px">${[25, 50, 90].map(m => `<option value="${m}" ${m === p ? 'selected' : ''}>${m} min</option>`).join('')}</select>
+      <input type="hidden" name="goal" value=""><button class="btn primary" type="submit">${icon('play')}Start</button></form>
+    <button class="btn ghost sm" data-go="focus" style="margin-top:8px">Sessions and focus history</button></section>`;
 }
 
 function targetRow(tg, i = 0) {
@@ -698,7 +718,7 @@ function viewFocus() {
   const week = range(addDays(t, -6), t).map(d => ({ label: parseDay(d).toLocaleDateString(undefined, { weekday: 'short' }), value: round1(focusMinOn(d) / 60), tip: `${shortDay(d)}: ${fmtMin(focusMinOn(d))} focused` }));
 
   return `
-  <div class="view-head"><div><h1>Focus</h1><p class="sub">${ASCEND_IS_MOBILE ? 'One task. One timer. Lock your phone and get to work: Ascend tells you when time is up.' : 'One task. One timer. Ascend notices when you drift away from the keyboard and scores your focus.'}</p></div></div>
+  <div class="view-head"><div><button class="btn ghost sm back-btn" data-go="today">‹ Today</button><h1>Focus</h1><p class="sub">${ASCEND_IS_MOBILE ? 'One task. One timer. Lock your phone and get to work: Ascend tells you when time is up.' : 'One task. One timer. Ascend notices when you drift away from the keyboard and scores your focus.'}</p></div></div>
   <div class="focus-stage">
     <section class="timer-wrap ${a && !a.pausedAt ? 'running' : ''} ${a && a.pausedAt ? 'paused' : ''}" id="timerWrap">
       <div class="aurora"><i></i><i></i><i></i></div>
@@ -764,6 +784,7 @@ function startTimerLoop() {
     const lq = $('#liveQ'); if (lq) lq.textContent = q + '%';
     const li = $('#liveIdle'); if (li) li.textContent = `${a.drifts || 0} drift${a.drifts === 1 ? '' : 's'}`;
     const rt = $('#railTimer'); if (rt) rt.textContent = `Focusing · ${fmtClock(Math.max(remain, 0))}`;
+    const tt = $('#tdTimer'); if (tt) tt.textContent = fmtClock(Math.max(remain, 0));
     if (Math.round(el) % 30 === 0) save();
     if (remain <= 0) finishSession(true);
   }, 1000);
@@ -799,14 +820,14 @@ function finishSession(auto = false) {
 }
 
 // ---------- GOALS / SEASON ----------
-function viewGoals() {
+function viewGoals(tabs = '') {
   const si = seasonInfo();
   const all = activeGoals();
   const goals = UI.area ? all.filter(g => (g.area || 'study') === UI.area) : all;
   const recs = recommendations(goals.filter(g => !isLevel(g)));
   return `
   <div class="view-head"><div><h1>Goals</h1><p class="sub">Every part of your life: study, health, mind, hobbies and people. An honest read on every goal and habit.</p></div>
-    <button class="btn primary shine" data-act="new-goal">${icon('plus')}New goal</button></div>
+    <div class="row wrap">${tabs}<button class="btn primary shine" data-act="new-goal">${icon('plus')}New goal</button></div></div>
 
   <section class="panel" style="margin-bottom:18px">
     <div class="season-banner">
@@ -934,7 +955,7 @@ function barChart(data, { color = '#FF6B4A', unit = '', height = 160, fmt = (v) 
 }
 
 // ---------- FITNESS ----------
-function viewFitness() {
+function viewFitness(tabs = '') {
   const t = todayStr();
   const ws = weekStart(t);
   const thisWeek = D.workouts.filter(w => w.date >= ws && w.date <= t);
@@ -962,8 +983,8 @@ function viewFitness() {
   const rd = readiness(t);
   const tips = fitnessSuggestions(t);
   return `
-  <div class="view-head"><div><h1>Fitness</h1><p class="sub">${rd ? 'Train with your body, not against it.' : ivOn ? 'Your Amazfit workouts arrive through intervals.icu.' : 'Every session counts.'}</p></div>
-    <div class="row">${ivOn ? `<button class="btn ghost" data-act="iv-sync">${icon('sync', 'class="' + (IVSYNC.busy ? 'spinning' : '') + '"')}Sync</button>` : `<button class="btn" data-act="iv-connect">${icon('pulse')}Connect intervals.icu</button>`}
+  <div class="view-head"><div><h1>Health</h1><p class="sub">${rd ? 'Train with your body, not against it.' : ivOn ? 'Your workouts arrive from intervals.icu and Health Connect.' : 'Every session counts.'}</p></div>
+    <div class="row wrap">${tabs}${ivOn ? `<button class="btn ghost" data-act="iv-sync">${icon('sync', 'class="' + (IVSYNC.busy ? 'spinning' : '') + '"')}Sync</button>` : `<button class="btn" data-act="iv-connect">${icon('pulse')}Connect intervals.icu</button>`}
     <button class="btn primary" data-act="log-workout">${icon('plus')}Log workout</button></div></div>
   ${typeof whoopRow === 'function' ? whoopRow(t) : ''}
   ${rd ? `<div class="ready-wrap">
@@ -998,7 +1019,7 @@ function viewFitness() {
   <section class="panel">
     <div class="panel-head"><h3>${UI.allWorkouts ? `All workouts (${allW.length})` : 'Recent workouts'}</h3>${ivOn && D.sync.intervalsAt ? `<span class="muted" style="font-size:12px">synced ${ago(D.sync.intervalsAt)}</span>` : ''}</div>
     <div class="w-list">${recent.map((w, i) => { const ty = wType(w.type); return `<div class="w-item" style="--i:${i}"><div class="w-badge" style="background:${ty.color}1A;color:${ty.color}">${icon(ty.icon)}</div>
-      <div class="grow"><b>${esc(w.name || ty.label)}${w.distance ? ` · ${w.distance} km` : ''}</b> ${w.source === 'intervals' ? '<span class="src-badge">intervals.icu</span>' : ''}<div class="muted" style="font-size:12.5px">${shortDay(w.date)} · ${fmtMin(w.minutes)}${w.distance && w.type === 'run' ? ' · ' + paceStr(w.minutes, w.distance) : ''}${w.avgHr ? ' · ' + w.avgHr + ' bpm' : ''}${w.load ? ' · load ' + w.load : ''}${w.effort ? ' · effort ' + w.effort + '/5' : ''}${w.notes ? ' · ' + esc(w.notes) : ''}</div></div>
+      <div class="grow"><b>${esc(w.name || ty.label)}${w.distance ? ` · ${w.distance} km` : ''}</b> ${w.source === 'intervals' ? '<span class="src-badge">intervals.icu</span>' : w.source === 'hc' ? '<span class="src-badge">Health Connect</span>' : ''}<div class="muted" style="font-size:12.5px">${shortDay(w.date)} · ${fmtMin(w.minutes)}${w.distance && w.type === 'run' ? ' · ' + paceStr(w.minutes, w.distance) : ''}${w.avgHr ? ' · ' + w.avgHr + ' bpm' : ''}${w.load ? ' · load ' + w.load : ''}${w.effort ? ' · effort ' + w.effort + '/5' : ''}${w.notes ? ' · ' + esc(w.notes) : ''}</div></div>
       <button class="icon-btn" data-act="del-workout" data-id="${w.id}" title="Remove from Ascend">${icon('trash')}</button></div>`; }).join('') || `<div class="empty"><div class="empty-art">${icon('run')}</div><h3>No workouts yet</h3><p>Log today's walk, run or gym session, or connect intervals.icu to bring in your Amazfit workouts.</p><button class="btn primary" data-act="log-workout">${icon('plus')}Log workout</button></div>`}</div>
     ${allW.length > 8 ? `<button class="btn ghost more-btn" data-act="toggle-all-workouts">${UI.allWorkouts ? 'Show fewer' : `Show all ${allW.length} workouts`}</button>` : ''}
   </section>`;
@@ -1047,9 +1068,11 @@ function journalText(j) {
   return [...old, j.freewrite].filter(Boolean).join('\n\n');
 }
 function viewJournal() {
-  const count = journalEntries().length;
-  const tabs = `<div class="seg big-seg" id="jtab"><button data-jtab="write" class="${UI.jtab !== 'history' ? 'on' : ''}">Write</button><button data-jtab="history" class="${UI.jtab === 'history' ? 'on' : ''}">History${count ? ` · ${count}` : ''}</button></div>`;
-  return UI.jtab === 'history' ? journalHistory(tabs) : journalWrite(tabs);
+  const count = journalEntries().length + Object.values(D.reviews).filter(r => r && r.at).length;
+  const due = !reviewedThisWeek() && new Date().getDay() === Number(D.settings.weeklyDay);
+  const tab = UI.jtab || 'write';
+  const tabs = `<div class="seg big-seg" id="jtab"><button data-jtab="write" class="${tab === 'write' ? 'on' : ''}">Write</button><button data-jtab="review" class="${tab === 'review' ? 'on' : ''}">Weekly review${due ? ' <i class="seg-dot"></i>' : ''}</button><button data-jtab="history" class="${tab === 'history' ? 'on' : ''}">History${count ? ` · ${count}` : ''}</button></div>`;
+  return tab === 'history' ? journalHistory(tabs) : tab === 'review' ? viewReview(tabs) : journalWrite(tabs);
 }
 
 function journalHistory(tabs) {
@@ -1068,13 +1091,14 @@ function journalHistory(tabs) {
   </section>
   <div class="j-tools">
     <input class="input" id="jSearch" placeholder="Search your entries" value="${esc(UI.jq || '')}" autocomplete="off">
-    <div class="seg" id="jFilter">${[['all', 'All'], ['good', 'Good days'], ['low', 'Hard days']].map(([k, l]) => `<button data-jfilter="${k}" class="${(UI.jfilter || 'all') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="seg" id="jFilter">${[['all', 'All'], ['good', 'Good days'], ['low', 'Hard days'], ['weeks', 'Weekly reviews']].map(([k, l]) => `<button data-jfilter="${k}" class="${(UI.jfilter || 'all') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
   </div>
   <div id="jlist">${journalListHTML()}</div>`;
 }
 
 function journalListHTML() {
   const q = (UI.jq || '').toLowerCase().trim(); const f = UI.jfilter || 'all';
+  if (f === 'weeks') return reviewListHTML(q);
   const list = journalEntries().filter(([, e]) => {
     if (f === 'good' && !(e.mood >= 4)) return false;
     if (f === 'low' && !(e.mood && e.mood <= 2)) return false;
@@ -1091,6 +1115,20 @@ function journalListHTML() {
   html += '</div>';
   if (list.length > shown.length) html += `<button class="btn more-btn" data-act="j-more">Show ${Math.min(30, list.length - shown.length)} more of ${list.length - shown.length}</button>`;
   return html;
+}
+
+// Closed weeks live in History, newest first
+function reviewListHTML(q = '') {
+  const list = Object.entries(D.reviews).filter(([, r]) => r && r.at).sort((a, b) => b[0].localeCompare(a[0]))
+    .filter(([, r]) => !q || ['win', 'struggle', 'lesson', 'stop'].some(k => String(r[k] || '').toLowerCase().includes(q)) || (r.priorities || []).some(p => p.title.toLowerCase().includes(q)));
+  if (!list.length) return `<div class="empty"><p>${q ? 'No reviews match.' : 'Your closed weeks will collect here.'}</p></div>`;
+  const cur = (latestReview(6) || {}).key;
+  return `<div class="j-grid">${list.map(([k, r], i) => { const ws = weekStats(addDays(k, -6), k); return `<article class="je ${UI.jopen === 'r' + k ? 'open' : ''}" data-rkey="${k}" style="--i:${i % 12};--mc:var(--violet)">
+    <header data-act="r-toggle"><div><b>Week to ${dayName(k, { weekday: 'short', day: 'numeric', month: 'short' })}</b><span class="muted">${round1(ws.focusMin / 60)}h focus · ${ws.workouts} workouts${ws.sleep !== null ? ` · ${ws.sleep}h sleep` : ''}</span></div>
+      <span class="je-tags">${r.rating ? `<span class="chip">${WEEKRATE[r.rating - 1]}</span>` : ''}</span></header>
+    <div class="je-body"><p class="je-text">${esc([r.win && 'Win: ' + r.win, r.struggle && 'Did not go well: ' + r.struggle, r.lesson && 'Lesson: ' + r.lesson, r.stop && 'Stop doing: ' + r.stop, (r.priorities || []).length && 'Priorities: ' + r.priorities.map(p => (p.done ? '✓ ' : '✗ ') + p.title).join(', ')].filter(Boolean).join('\n\n'))}</p></div>
+    <footer><button class="btn ghost sm" data-act="r-toggle">${UI.jopen === 'r' + k ? 'Show less' : 'Read'}</button>${k === cur ? `<button class="btn ghost sm" data-act="r-edit">${icon('edit')}Edit</button>` : ''}</footer>
+  </article>`; }).join('')}</div>`;
 }
 
 function journalCard(d, e, i) {
@@ -1161,9 +1199,11 @@ function reviewKey() {
   const lr = latestReview(6);
   return lr ? lr.key : todayStr();
 }
-function viewReview() {
+function viewReview(tabs = '') {
   const key = reviewKey();
   const rv = D.reviews[key] || {};
+  // Once the week is closed the form steps aside: the review moves to History until next week's is due
+  if (rv.at && !UI.reviewEdit) return reviewDone(tabs, key, rv);
   const from = addDays(key, -6);
   const ws = weekStats(from, key);
   const prev = Object.keys(D.reviews).filter(k => k < key).sort().pop();
@@ -1176,8 +1216,8 @@ function viewReview() {
   const past = UI.allReviews ? allPast : allPast.slice(0, 4);
   const tile = (val, fmt, label, cls = '') => `<div class="stat ${cls}"><b>${val === null ? '–' : `<span data-count="${val}" data-fmt="${fmt}">${val}</span>`}${fmt === 'dec' && label.includes('sleep') && val !== null ? 'h' : ''}</b><span>${label}</span></div>`;
   return `
-  <div class="view-head"><div><h1>Weekly review</h1><p class="sub">${dayName(from, { weekday: 'short', day: 'numeric', month: 'short' })} to ${dayName(key, { weekday: 'short', day: 'numeric', month: 'short' })}. Close the week honestly, then set three priorities for the next one.</p></div>
-    <button class="btn violet" data-go="coach:weekly">${icon('coach')}Weekly insights from Claude</button></div>
+  <div class="view-head"><div><h1>Journal</h1><p class="sub">Weekly review · ${dayName(from, { weekday: 'short', day: 'numeric', month: 'short' })} to ${dayName(key, { weekday: 'short', day: 'numeric', month: 'short' })}. Close the week honestly, then set three priorities for the next one.</p></div>
+    ${tabs}</div>
   <section class="review-hero">
     <div class="rh-glow"></div>
     <div class="stat-row">
@@ -1200,7 +1240,6 @@ function viewReview() {
     <section class="panel">
       <form data-form="review">
         <div class="field"><label>How was your week?</label><div class="seg wide" data-rate>${WEEKRATE.map((l, i) => `<button type="button" data-v="${i + 1}" class="${UI.rate === i + 1 ? 'on' : ''}">${l}</button>`).join('')}</div></div>
-        ${typeof balanceFields === 'function' ? balanceFields(rv) : ''}
         <div class="field"><label>Biggest win</label><textarea class="input" name="win" placeholder="What are you proud of this week?">${esc(rv.win || '')}</textarea></div>
         <div class="field"><label>What did not go well, and why?</label><textarea class="input" name="struggle" placeholder="Look at the numbers above. What pattern do you see?">${esc(rv.struggle || '')}</textarea></div>
         <div class="row"><div class="field grow"><label>Lesson to carry forward</label><input class="input" name="lesson" value="${esc(rv.lesson || '')}"></div>
@@ -1209,14 +1248,35 @@ function viewReview() {
           ${[0, 1, 2].map(i => `<div class="ci-row"><span class="ci-num">${i + 1}</span><input class="input grow" name="p${i}" value="${esc(pr[i] ? pr[i].title : '')}" placeholder="${['The one that matters most', 'Second priority', 'Health, learning or relationships'][i]}" maxlength="120"></div>`).join('')}
           <span class="hint">${gEnabled() && D.settings.googleTasks ? 'These go to Google Tasks, due in 7 days, and show on your Today screen all week.' : 'These show on your Today screen all week.'}</span></div>
         <div class="row wrap" style="justify-content:flex-end;gap:8px">
+          ${UI.reviewEdit ? `<button type="button" class="btn ghost" data-act="r-cancel" style="margin-right:auto">Cancel</button>` : ''}
           <button type="button" class="btn" data-act="copy-review">${icon('copy')}Copy for Notion</button>
           <button class="btn primary shine big" type="submit">${icon('check')}${rv.at ? 'Update review' : 'Close the week'}</button>
         </div>
       </form>
     </section>
-    <section class="panel"><div class="panel-head"><h3>Past reviews</h3>${allPast.length > 4 ? `<button class="btn ghost sm" data-act="toggle-all-reviews">${UI.allReviews ? 'Fewer' : 'All ' + allPast.length}</button>` : ''}</div>
-      ${past.map(([k, r]) => `<div style="padding:10px 0;border-bottom:1px solid var(--mist-2)"><b>Week to ${shortDay(k)}</b>${r.rating ? ` <span class="chip">${WEEKRATE[r.rating - 1]}</span>` : ''}${r.win ? `<p style="font-size:13px">${esc(r.win)}</p>` : ''}${r.lesson ? `<p class="muted" style="font-size:12.5px">Lesson: ${esc(r.lesson)}</p>` : ''}${(r.priorities || []).length ? `<p class="muted" style="font-size:12.5px">Priorities: ${r.priorities.map(p => (p.done ? '✓ ' : '') + esc(p.title)).join(', ')}</p>` : ''}</div>`).join('') || '<p class="muted">Your weekly reviews will collect here. Your next one is due on ' + WEEKDAYS[Number(D.settings.weeklyDay)] + ' at ' + fmtHM(D.settings.weeklyTime) + '.</p>'}
+    <div class="grid" style="align-content:start">
+      ${typeof lifeBalanceMini === 'function' ? lifeBalanceMini(from, key) : ''}
+      ${typeof insightsPanel === 'function' ? insightsPanel() : ''}
+      ${allPast.length ? `<button class="btn ghost" data-act="r-history">${icon('journal')}Past reviews in History</button>` : ''}
+    </div>
+  </div>`;
+}
+
+function reviewDone(tabs, key, rv) {
+  const next = addDays(key, 7), pr = rv.priorities || [];
+  return `
+  <div class="view-head"><div><h1>Journal</h1><p class="sub">This week is closed. Your next review opens on ${dayName(next, { weekday: 'long', day: 'numeric', month: 'short' })}.</p></div>${tabs}</div>
+  <div class="grid g-main">
+    <section class="panel review-done">
+      <div class="rd-check">${icon('check', 'stroke-width="3"')}</div>
+      <h2>Week to ${dayName(key, { day: 'numeric', month: 'short' })} closed${rv.rating ? `: ${WEEKRATE[rv.rating - 1].toLowerCase()}` : ''}</h2>
+      ${pr.length ? `<p class="muted" style="margin:6px 0 10px">This week's priorities, also on Today:</p><div class="prio-chips" style="justify-content:center">${pr.map(p => `<span class="chip ${p.done ? 'status-on' : ''}">${p.done ? '✓ ' : ''}${esc(p.title)}</span>`).join('')}</div>` : ''}
+      <div class="row wrap" style="justify-content:center;gap:8px;margin-top:16px"><button class="btn" data-act="r-history">${icon('journal')}Read it in History</button><button class="btn ghost" data-act="r-edit">${icon('edit')}Edit</button><button class="btn ghost" data-go="coach:weekly">${icon('coach')}Weekly insights from Claude</button></div>
     </section>
+    <div class="grid" style="align-content:start">
+      ${typeof lifeBalanceMini === 'function' ? lifeBalanceMini(addDays(todayStr(), -6), todayStr()) : ''}
+      ${typeof insightsPanel === 'function' ? insightsPanel() : ''}
+    </div>
   </div>`;
 }
 
@@ -1378,10 +1438,12 @@ function viewSettings() {
       <div class="field grow"><label>Weekly review time</label><input class="input" type="time" name="weeklyTime" value="${s.weeklyTime}"></div></div>
       <div class="row"><div class="field grow"><label>Motivation nudge every</label><select class="input" name="nudgeEveryHours">${hrs.map(h => `<option value="${h}" ${Number(s.nudgeEveryHours) === h ? 'selected' : ''}>${h} hour${h > 1 ? 's' : ''}</option>`).join('')}</select></div>
       <div class="field grow"><label>Between</label><div class="row"><input class="input" type="time" name="activeStart" value="${s.activeStart}"><input class="input" type="time" name="activeEnd" value="${s.activeEnd}"></div></div></div>
+      <div class="row"><div class="field grow"><label>Lights out</label><input class="input" type="time" name="bedTime" value="${esc(s.bedTime || '00:30')}"></div>
+      <div class="field grow"><label>Bedtime reminder</label><select class="input" name="bedLead">${[[0, 'Off'], [15, '15 min before'], [30, '30 min before'], [45, '45 min before'], [60, '1 hour before']].map(([v, l]) => `<option value="${v}" ${Number(s.bedLead ?? 30) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
       <label class="row toggle-row"><input type="checkbox" name="sound" ${s.sound ? 'checked' : ''}> Play a sound with reminders and timers</label>
       <label class="row toggle-row desk-only"><input type="checkbox" name="launchAtLogin" ${s.launchAtLogin ? 'checked' : ''}> Start Ascend quietly when Windows starts</label>
       <div class="row wrap" style="margin-top:6px"><span class="muted" style="font-size:12px;width:100%">Preview a reminder:</span>
-        <button type="button" class="btn sm" data-preview="checkin">Check-in</button><button type="button" class="btn sm" data-preview="nudge">Nudge</button><button type="button" class="btn sm" data-preview="journal">Journal</button><button type="button" class="btn sm" data-preview="weekly">Weekly review</button></div>
+        <button type="button" class="btn sm" data-preview="checkin">Check-in</button><button type="button" class="btn sm" data-preview="nudge">Nudge</button><button type="button" class="btn sm" data-preview="journal">Journal</button><button type="button" class="btn sm" data-preview="weekly">Weekly review</button><button type="button" class="btn sm" data-preview="bedtime">Bedtime</button></div>
       <div class="desk-only">
       <h3 class="set-h">${icon('folder')} Your data</h3>
       <p class="muted" style="font-size:13px;word-break:break-all">${esc(META.dataDir)}</p>
@@ -1391,6 +1453,7 @@ function viewSettings() {
     </section>
     <div class="grid" style="align-content:start">
       ${devicePanel()}
+      ${typeof backupPanel === 'function' ? backupPanel() : ''}
       <section class="panel conn ${g ? 'on' : ''}">
         <div class="conn-head"><span class="conn-ic g">${icon('google')}</span><div class="grow"><h3>Google Tasks and Calendar</h3><p class="muted" style="font-size:12.5px">${g ? `Connected${GSYNC.email ? ' as ' + esc(GSYNC.email) : ''}. ${GSYNC.lastOk ? 'Last synced ' + ago(GSYNC.lastOk) + '.' : ''}` : 'Two-way sync of targets with Google Tasks, and timed targets in Google Calendar.'}</p></div>
           ${g ? `<button type="button" class="btn sm" data-act="g-sync">${icon('sync')}Sync now</button>` : `<button type="button" class="btn sm primary" data-act="g-setup">Set up</button>`}</div>
@@ -1670,7 +1733,7 @@ document.addEventListener('click', async (e) => {
   const mood = e.target.closest('[data-mood]');
   if (mood) { $$('[data-mood]').forEach(b => b.classList.toggle('on', b === mood)); UI.mood = Number(mood.dataset.mood); return; }
   const jt = e.target.closest('[data-jtab]');
-  if (jt) { stashJournalDraft(); UI.jtab = jt.dataset.jtab; if (UI.jtab === 'history') UI.jlimit = 30; go('journal'); return; }
+  if (jt) { stashJournalDraft(); UI.jtab = jt.dataset.jtab; UI.reviewEdit = false; if (UI.jtab === 'history') UI.jlimit = 30; go('journal'); return; }
   const jf = e.target.closest('[data-jfilter]');
   if (jf) { UI.jfilter = jf.dataset.jfilter; UI.jlimit = 30; $$('[data-jfilter]').forEach(b => b.classList.toggle('on', b === jf)); $('#jlist').innerHTML = journalListHTML(); return; }
   const nk = e.target.closest('[data-nkind]');
@@ -1722,7 +1785,15 @@ document.addEventListener('click', async (e) => {
     case 'copy-notion': { saveJournalForm(); await bridge.copy(journalMarkdown(UI.jdate || t)); toast('Copied. Paste it into Notion.'); break; }
     case 'j-today': UI.jdate = null; go('journal', { keepScroll: false }); break;
     case 'j-open': { const d = a.dataset.d; if (D.journal[d] && D.journal[d].saved) { UI.jtab = 'history'; UI.jopen = d; UI.jq = ''; UI.jfilter = 'all'; const idx = journalEntries().findIndex(([k]) => k === d); UI.jlimit = Math.max(30, idx + 1); go('journal'); setTimeout(() => { const c = $(`[data-jdate="${d}"]`); if (c) c.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 80); } else { UI.jdate = d === t ? null : d; UI.jtab = 'write'; go('journal'); } break; }
-    case 'j-toggle': { const c = a.closest('[data-jdate]'); const open = !c.classList.contains('open'); $$('.je.open').forEach(x => { x.classList.remove('open'); $('footer [data-act=j-toggle]', x).textContent = 'Read'; }); c.classList.toggle('open', open); $('footer [data-act=j-toggle]', c).textContent = open ? 'Show less' : 'Read'; UI.jopen = open ? c.dataset.jdate : null; break; }
+    case 'j-toggle': case 'r-toggle': {
+      const c = a.closest('.je'); const open = !c.classList.contains('open');
+      $$('.je.open').forEach(x => { x.classList.remove('open'); const b = $('footer [data-act$=-toggle]', x); if (b) b.textContent = 'Read'; });
+      c.classList.toggle('open', open); $('footer [data-act$=-toggle]', c).textContent = open ? 'Show less' : 'Read';
+      UI.jopen = open ? (c.dataset.jdate || 'r' + c.dataset.rkey) : null; break;
+    }
+    case 'r-edit': UI.jtab = 'review'; UI.reviewEdit = true; go('journal'); break;
+    case 'r-cancel': UI.reviewEdit = false; go('journal'); break;
+    case 'r-history': UI.jtab = 'history'; UI.jfilter = 'weeks'; UI.jq = ''; go('journal'); break;
     case 'j-edit': { const d = a.closest('[data-jdate]').dataset.jdate; UI.jdate = d === t ? null : d; UI.jtab = 'write'; go('journal'); break; }
     case 'j-notion': { const e2 = D.journal[a.closest('[data-jdate]').dataset.jdate]; if (e2 && e2.notionLink) bridge.openExternal(e2.notionLink); break; }
     case 'j-copy': await bridge.copy(journalMarkdown(a.closest('[data-jdate]').dataset.jdate)); toast('Entry copied'); break;
@@ -1790,7 +1861,7 @@ document.addEventListener('submit', (e) => {
     case 'start-focus': startSession(String(fd.get('task') || ''), fd.get('goal') || '', fd.get('custom')); break;
     case 'journal': saveJournalForm(); notionPush('journal', UI.jdate || t); toast('Reflection saved. See you tomorrow.'); burst($('[data-form=journal] [type=submit]')); chime('done'); setTimeout(() => { rerender(); checkStreakMilestone(); }, 300); break;
     case 'review': {
-      saveReviewForm(); notionPush('review', reviewKey());
+      saveReviewForm(); notionPush('review', reviewKey()); UI.reviewEdit = false;
       const n = D.reviews[reviewKey()].priorities.length;
       chime('done'); celebrate({ big: '✓', title: 'Week closed', text: n ? `${n} priorit${n === 1 ? 'y' : 'ies'} set for next week${gEnabled() && D.settings.googleTasks ? ' and sent to Google Tasks' : ''}. Rest well.` : 'Reflection saved. Set priorities to give next week a direction.', cta: 'Onward' });
       setTimeout(rerender, 300);
@@ -1804,9 +1875,10 @@ document.addEventListener('submit', (e) => {
       // and saving the stale, older values would quietly undo it on every device.
       const shown = UI.settingsForm || {}, now = formSnapshot(f);
       const changed = (k) => k in now && (!(k in shown) || shown[k] !== now[k]);
-      for (const k of ['name', 'buddyName', 'notionToken', 'dob', 'sex', 'maxHr', 'sleepBase', 'heightCm', 'bodyFat', 'leanKg', 'weightKg', 'activeStart', 'activeEnd', 'morningTime', 'journalTime', 'weeklyTime', 'calendarUrl', 'notionUrl', 'intervalsKey', 'intervalsAthlete', 'chessSite', 'chessUser', 'goodreadsUrl']) if (changed(k)) s[k] = String(fd.get(k) || '').trim();
+      for (const k of ['name', 'buddyName', 'notionToken', 'dob', 'sex', 'maxHr', 'sleepBase', 'heightCm', 'bodyFat', 'leanKg', 'weightKg', 'activeStart', 'activeEnd', 'morningTime', 'journalTime', 'weeklyTime', 'bedTime', 'calendarUrl', 'notionUrl', 'intervalsKey', 'intervalsAthlete', 'chessSite', 'chessUser', 'goodreadsUrl']) if (changed(k)) s[k] = String(fd.get(k) || '').trim();
       if (changed('nudgeEveryHours')) s.nudgeEveryHours = Number(fd.get('nudgeEveryHours')) || 2;
       if (changed('weeklyDay')) s.weeklyDay = Number(fd.get('weeklyDay')) || 0;
+      if (changed('bedLead')) s.bedLead = Number(fd.get('bedLead')) || 0;
       for (const k of ['remindersOn', 'sound', 'launchAtLogin', 'buddy', 'notionAuto']) if (changed(k)) s[k] = fd.get(k) === 'on';
       s.buddyName = s.buddyName || 'Mochi';
       if (changed('ankiOn')) { const was = s.ankiOn; s.ankiOn = fd.get('ankiOn') === 'on'; if (s.ankiOn && !was) setTimeout(() => syncAnki(true), 300); }
@@ -1851,7 +1923,7 @@ function saveReviewForm() {
   const rv = D.reviews[key] = D.reviews[key] || { priorities: [] };
   for (const k of ['win', 'struggle', 'lesson', 'stop']) rv[k] = String(fd.get(k) || '').trim();
   if (UI.rate) rv.rating = UI.rate;
-  if (typeof readBalance === 'function') rv.balance = readBalance(fd) || rv.balance;
+  if (typeof areaScores === 'function') rv.balance = areaValues(areaScores(addDays(key, -6), key));
   const titles = [0, 1, 2].map(i => String(fd.get('p' + i) || '').trim());
   const old = rv.priorities || [];
   const next = [];
@@ -1899,6 +1971,7 @@ function goalModal(g = null) {
         <div class="field" style="width:140px" id="keywordField"><label>Calendar keyword</label><input class="input" name="keyword" value="${esc(g.keyword || '')}" placeholder="Guitar"></div>
         <div class="field" style="width:130px" id="dirField"><label>Direction</label><select class="input" name="dir"><option value="-1" ${Number(g.dir) !== 1 ? 'selected' : ''}>Go down to</option><option value="1" ${Number(g.dir) === 1 ? 'selected' : ''}>Go up to</option></select></div></div>
       <p class="hint muted" id="metricHint" style="font-size:12px;margin:-6px 0 14px"></p>
+      ${habitAutoFields(g)}
       <div class="field"><label>Colour</label><div class="swatches">${[...new Set([...GOAL_COLORS, ...AREAS.map(a => a.color)])].map(c => `<button type="button" data-color="${c}" style="background:${c}" class="${c === g.color ? 'on' : ''}" aria-label="Colour"></button>`).join('')}</div></div>
       <div class="modal-actions">${isNew ? '' : `<button type="button" class="btn ghost" data-local="archive" style="margin-right:auto;color:var(--off)">Archive goal</button>`}<button type="button" class="btn ghost" data-act="close-modal">Cancel</button><button class="btn primary" type="submit">${isNew ? 'Create goal' : 'Save'}</button></div>
     </form>`);
@@ -1906,14 +1979,14 @@ function goalModal(g = null) {
   const show = (id, on) => { $('#' + id, m).style.display = on ? '' : 'none'; };
   const syncFields = () => {
     const mv = $('[name=metric]', m).value, meta = METRICS[mv] || {};
-    show('unitField', mv === 'count'); show('timesField', mv === 'habit'); show('keywordField', mv === 'calendar'); show('dirField', mv === 'weight'); show('targetField', mv !== 'habit');
+    show('unitField', mv === 'count'); show('timesField', mv === 'habit'); show('autoField', mv === 'habit'); show('keywordField', mv === 'calendar'); show('dirField', mv === 'weight'); show('targetField', mv !== 'habit');
     $('[name=keyword]', m).required = mv === 'calendar';
     $('#targetLabel', m).textContent = meta.kind === 'level' ? `Aim for (${meta.unit})` : 'Season target';
     $('#metricHint', m).textContent = meta.hint || '';
     if (mv !== lastMetric && METRIC_DEFAULTS[mv] != null && (isNew || mv !== g.metric)) $('[name=target]', m).value = METRIC_DEFAULTS[mv];
     lastMetric = mv;
   };
-  syncFields(); $('[name=metric]', m).addEventListener('change', syncFields);
+  syncFields(); $('[name=metric]', m).addEventListener('change', syncFields); wireHabitAuto(m);
   m.addEventListener('click', (e) => {
     const sw = e.target.closest('[data-color]'); if (sw) { color = sw.dataset.color; $$('[data-color]', m).forEach(b => b.classList.toggle('on', b === sw)); }
     const ap = e.target.closest('[data-area-pick]');
@@ -1930,7 +2003,7 @@ function goalModal(g = null) {
     e.preventDefault(); const fd = new FormData(e.target);
     const metric = fd.get('metric');
     Object.assign(g, { area, name: String(fd.get('name')).trim(), why: String(fd.get('why') || '').trim(), metric, target: Number(fd.get('target')) || 1, unit: String(fd.get('unit') || '').trim(), color });
-    if (metric === 'habit') { g.times = Number(fd.get('times')) || 3; g.target = goalTarget(g); }
+    if (metric === 'habit') { g.times = Number(fd.get('times')) || 3; g.target = goalTarget(g); readHabitAuto(g, fd); }
     if (metric === 'calendar') g.keyword = String(fd.get('keyword') || '').trim();
     if (metric === 'weight') g.dir = Number(fd.get('dir')) || -1;
     if (isNew) D.goals.push(g);
@@ -1999,12 +2072,15 @@ const AFTER = {
     Motion.climb(dd.targets.length ? dd.targets.filter(x => x.done).length / dd.targets.length : 0, fresh);
     if (fresh) Motion.countUp($('#view'));
     loadCalendar();
+    if (D.activeSession) startTimerLoop();
   },
   focus: (fresh) => { if (fresh) Motion.countUp($('#view')); if (D.activeSession) startTimerLoop(); },
   goals: (fresh) => { if (fresh) Motion.countUp($('#view')); },
-  fitness: (fresh) => { if (fresh) Motion.countUp($('#view')); },
-  review: (fresh) => { if (fresh) { UI.rate = (D.reviews[reviewKey()] || {}).rating || 0; Motion.countUp($('#view')); } },
-  journal: (fresh) => { if (fresh) { const j = D.journal[UI.jdate || todayStr()] || {}; UI.mood = j.mood || 0; UI.wordBurst = wordCount(journalText(j)) >= 150; } },
+  journal: (fresh) => {
+    if (!fresh) return;
+    if (UI.jtab === 'review') { UI.rate = (D.reviews[reviewKey()] || {}).rating || 0; Motion.countUp($('#view')); return; }
+    const j = D.journal[UI.jdate || todayStr()] || {}; UI.mood = j.mood || 0; UI.wordBurst = wordCount(journalText(j)) >= 150;
+  },
   coach: () => { loadCalendar(); fitNotes(); },
   settings: async () => { const f = $('[data-form=settings]'); if (f) UI.settingsForm = formSnapshot(f); const img = $('#pairQr'); if (img && bridge.qr) { const url = await bridge.qr(pairingCode()); if (url) img.src = url; } }
 };

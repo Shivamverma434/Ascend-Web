@@ -50,11 +50,6 @@
 .area-ic { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: #fff; color: var(--c); flex: none; }
 .area-ic svg { width: 17px; height: 17px; }
 .area-score { font-family: var(--display); font-weight: 800; font-size: 18px; color: var(--c); }
-.balance-fields { display: flex; flex-direction: column; gap: 6px; }
-.bal-row { display: grid; grid-template-columns: 96px 1fr 26px; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; }
-.bal-row span { display: inline-flex; align-items: center; gap: 6px; }
-.bal-row input[type=range] { accent-color: var(--c); width: 100%; }
-.bal-row b { text-align: right; font-family: var(--display); }
 
 /* Settings */
 .conn-ic.hobby { background: #FFE6DC; color: var(--ember); }

@@ -460,9 +460,10 @@ async function syncIntervals(manual = false) {
       const v = { steps: r.steps ?? null, sleepSecs: r.sleepSecs ?? null, sleepScore: r.sleepScore ?? null, restingHR: r.restingHR ?? null, hrv: r.hrv ?? null, weight: r.weight ?? null, vo2max: r.vo2max ?? null };
       if (Object.values(v).some(x => x !== null)) D.wellness[String(r.id).slice(0, 10)] = v;
     }
+    if (typeof dedupeWorkouts === 'function') dedupeWorkouts();
     D.sync.intervalsAt = Date.now(); IVSYNC.error = '';
     save();
-    if (currentView === 'fitness' && !document.querySelector('.scrim')) rerender();
+    if (currentView === 'health' && !document.querySelector('.scrim')) rerender();
     if (manual) toast(added ? `${added} new activit${added === 1 ? 'y' : 'ies'} from intervals.icu` : 'intervals.icu is up to date');
     if (manual && skipped) setTimeout(() => toast(`${skipped} activit${skipped === 1 ? 'y' : 'ies'} came from Strava, which blocks sharing ${skipped === 1 ? 'it' : 'them'}. Connect Amazfit directly in intervals.icu.`), 2800);
     return { added, updated, skipped };

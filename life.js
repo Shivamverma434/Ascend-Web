@@ -27,7 +27,7 @@ const areaOf = (g) => AREAS.find(a => a.id === (g.area || 'study')) || AREAS[0];
 // More ways to track a goal. kind 'level' = a number you hold (sleep, VO2 max), not a season total.
 for (const [k, areas] of Object.entries({ hours: ['study', 'mind', 'hobbies'], tasks: ['study', 'mind', 'hobbies', 'people', 'health'], km: ['health'], workouts: ['health'], anki: ['study', 'mind'], count: ['study', 'mind', 'hobbies', 'people', 'health'] })) METRICS[k].areas = areas;
 Object.assign(METRICS, {
-  habit: { label: 'Habit: times a week', unit: 'times', kind: 'habit', areas: ['health', 'mind', 'hobbies', 'people', 'study'], hint: 'Tick it off on Today each time you do it. Ascend counts your week and keeps your streak.' },
+  habit: { label: 'Habit: times a week', unit: 'times', kind: 'habit', areas: ['health', 'mind', 'hobbies', 'people', 'study'], hint: 'Tick it off on Today, or let it tick itself from your data (below). Ascend counts your week and keeps your streak.' },
   calendar: { label: 'Time in Google Calendar', unit: 'h', areas: ['hobbies', 'mind', 'health', 'people', 'study'], hint: 'Counts hours of calendar events whose title contains your keyword, like "Guitar" or "Gym".' },
   books: { label: 'Books finished (Goodreads)', unit: 'books', areas: ['mind', 'hobbies'], hint: 'Counts books you mark as read on Goodreads. Add your Goodreads link in Settings › Hobby connections.' },
   chess: { label: 'Chess games played', unit: 'games', areas: ['hobbies', 'mind'], hint: 'Counts your games on Chess.com or Lichess. Add your username in Settings › Hobby connections.' },
@@ -80,7 +80,9 @@ function levelStatus(g) {
 
 // ---------- Habits ----------
 // D.habitLog[date][goalId] = { v: 1 }. One record per tick, so two devices ticking different habits never clash.
-const habitDone = (gid, d) => !!(D.habitLog && D.habitLog[d] && D.habitLog[d][gid]);
+const habitTicked = (gid, d) => !!(D.habitLog && D.habitLog[d] && D.habitLog[d][gid]);
+// A habit with a data source (sleep, workouts, Anki…) ticks itself; you can still tick it by hand
+const habitDone = (gid, d) => habitTicked(gid, d) || (typeof habitAuto === 'function' && habitAuto(D.goals.find(g => g.id === gid), d));
 function toggleHabit(gid, d = todayStr()) {
   D.habitLog = D.habitLog || {};
   const dayLog = D.habitLog[d] = D.habitLog[d] || {};
@@ -101,7 +103,7 @@ function habitStreak(g) {
   while (habitInWeek(g, ws) >= times && s < 520) { s++; ws = addDays(ws, -7); }
   return { n: s, unit: s === 1 ? 'week' : 'weeks' };
 }
-const habitCount = (g, from, until) => Object.entries(D.habitLog || {}).filter(([d, x]) => d >= from && d <= until && x[g.id]).length;
+const habitCount = (g, from, until) => g.auto ? range(from, until < todayStr() ? until : todayStr()).filter(d => habitDone(g.id, d)).length : Object.entries(D.habitLog || {}).filter(([d, x]) => d >= from && d <= until && x[g.id]).length;
 const habitGoals = () => activeGoals().filter(g => g.metric === 'habit');
 
 // ---------- Counts from connections and people ----------
@@ -133,7 +135,7 @@ function lifeGoalCard(g, i) {
     const times = habitTimes(g), ws = weekStart(todayStr()), wk = habitInWeek(g, ws), st = habitStreak(g), done = habitDone(g.id, todayStr());
     return `<div class="goal" style="--i:${i}">${head(`<span class="chip ${wk >= times ? 'status-on' : ''}">${wk}/${times} this week</span>`)}
       <div class="habit-week">${range(ws, addDays(ws, 6)).map(d => `<button type="button" class="hd ${habitDone(g.id, d) ? 'on' : ''} ${d === todayStr() ? 'today' : ''}" ${d <= todayStr() ? `data-act="habit-toggle" data-goal="${g.id}" data-d="${d}"` : 'disabled'} style="--c:${g.color}" title="${esc(shortDay(d))}">${'MTWTFSS'[(parseDay(d).getDay() + 6) % 7]}</button>`).join('')}</div>
-      <p class="muted" style="font-size:12.5px">${st.n ? `${icon('flame', 'style="width:13px;height:13px;color:var(--ember);vertical-align:-2px"')} ${st.n} ${st.unit} in a row. ` : ''}${times === 7 ? 'Every day.' : `${times} times a week.`} ${esc(a.label)}.</p>
+      <p class="muted" style="font-size:12.5px">${st.n ? `${icon('flame', 'style="width:13px;height:13px;color:var(--ember);vertical-align:-2px"')} ${st.n} ${st.unit} in a row. ` : ''}${times === 7 ? 'Every day.' : `${times} times a week.`} ${esc(a.label)}.${g.auto ? ` Ticks itself: ${esc(habitAutoLabel(g).toLowerCase())}.` : ''}</p>
       <div class="g-actions"><button class="btn sm ${done ? '' : 'primary'}" data-act="habit-toggle" data-goal="${g.id}" data-d="${todayStr()}">${icon('check')}${done ? 'Done today' : 'Mark done today'}</button>${edit}</div></div>`;
   }
   const s = levelStatus(g), unit = unitOf(g), d = levelDir(g);
@@ -141,7 +143,7 @@ function lifeGoalCard(g, i) {
     <div><span class="g-num" ${s.p != null ? `data-count="${s.p}" data-fmt="dec"` : ''}>${s.p != null ? s.p : '–'}</span> <span class="muted">${d > 0 ? 'aiming for' : 'aiming for under'} ${g.target} ${esc(unit)}</span></div>
     <div class="progress-bar"><i style="width:${s.pct}%;background:${g.color}"></i></div>
     <p class="muted" style="font-size:12.5px">${esc(METRICS[g.metric].hint)}</p>
-    <div class="g-actions">${g.metric === 'age' ? `<button class="btn sm" data-go="health">${icon('heart')}Healthspan</button>` : ['sleep', 'sri', 'steps', 'rhr', 'vo2', 'z2', 'hard', 'strength'].includes(g.metric) ? `<button class="btn sm" data-go="fitness">${icon('fitness')}See the data</button>` : ''}${edit}</div></div>`;
+    <div class="g-actions">${g.metric === 'age' ? `<button class="btn sm" data-go="healthspan">${icon('heart')}Healthspan</button>` : ['sleep', 'sri', 'steps', 'rhr', 'vo2', 'z2', 'hard', 'strength'].includes(g.metric) ? `<button class="btn sm" data-go="fitness">${icon('fitness')}See the data</button>` : ''}${edit}</div></div>`;
 }
 
 // Today: habits to tick off
@@ -151,7 +153,7 @@ function habitsTodayCard() {
   return `<section class="panel habits-card">
     <div class="panel-head"><h3>${icon('habit', 'style="width:16px;height:16px;color:var(--ember);vertical-align:-2px"')} Habits</h3><span class="muted" style="font-size:12px">${hs.filter(g => habitDone(g.id, t)).length}/${hs.length} today</span></div>
     ${hs.map(g => { const done = habitDone(g.id, t), wk = habitInWeek(g, ws), times = habitTimes(g), st = habitStreak(g); return `<div class="target habit-row ${done ? 'done' : ''}"><button class="check" data-act="habit-toggle" data-goal="${g.id}" data-d="${t}" aria-label="Done today" style="--c:${g.color}">${icon('check', 'stroke-width="3"')}</button>
-      <span class="grow">${esc(g.name)}</span><span class="muted habit-meta">${wk}/${times}${st.n ? ` · ${icon('flame', 'style="width:12px;height:12px;color:var(--ember);vertical-align:-1px"')}${st.n}` : ''}</span></div>`; }).join('')}
+      <span class="grow">${esc(g.name)}${g.auto ? ` <span class="auto-tag" title="${esc(habitAutoLabel(g))}">auto</span>` : ''}</span><span class="muted habit-meta">${wk}/${times}${st.n ? ` · ${icon('flame', 'style="width:12px;height:12px;color:var(--ember);vertical-align:-1px"')}${st.n}` : ''}</span></div>`; }).join('')}
   </section>`;
 }
 
@@ -185,13 +187,13 @@ function peopleTodayCard() {
     ${due.map(p => `<div class="target"><span class="avatar sm" style="background:${p.color || '#D6247A'}">${esc((p.name[0] || '?').toUpperCase())}</span><span class="grow"><b>${esc(p.name)}</b> <span class="muted" style="font-size:12.5px">${p.last ? `${sinceLast(p)} days since you connected` : 'not yet logged'}</span></span><button class="btn sm" data-act="person-connected" data-id="${p.id}">Connected</button></div>`).join('')}
   </section>`;
 }
-function viewPeople() {
+function viewPeople(tabs = '') {
   const ps = (D.people || []).slice().sort((a, b) => overdueBy(b) - overdueBy(a));
   const month = todayStr().slice(0, 7);
   const thisMonth = connectsIn(month + '-01', todayStr());
   return `
-  <div class="view-head"><div><h1>People</h1><p class="sub">${ps.length ? `${ps.length} ${ps.length === 1 ? 'person who makes' : 'people who make'} you who you are · ${thisMonth} catch-up${thisMonth === 1 ? '' : 's'} this month` : 'The relationships that make a life. Ascend reminds you when it has been too long.'}</p></div>
-    <button class="btn primary shine" data-act="person-new">${icon('plus')}Add person</button></div>
+  <div class="view-head"><div><h1>Goals</h1><p class="sub">${ps.length ? `${ps.length} ${ps.length === 1 ? 'person who makes' : 'people who make'} you who you are · ${thisMonth} catch-up${thisMonth === 1 ? '' : 's'} this month` : 'The relationships that make a life. Ascend reminds you when it has been too long.'}</p></div>
+    <div class="row wrap">${tabs}<button class="btn primary shine" data-act="person-new">${icon('plus')}Add person</button></div></div>
   ${ps.length ? `<div class="people-grid">${ps.map((p, i) => {
     const od = overdueBy(p), since = sinceLast(p), b = nextBirthday(p), every = p.every || 14;
     const frac = since == null ? 1 : clamp(since / every, 0, 1);
@@ -231,16 +233,7 @@ function personModal(p = null) {
   });
 }
 
-// ---------- Life balance (weekly review) ----------
-function balanceFields(rv) {
-  const b = rv.balance || {};
-  return `<div class="field"><label>Life balance: how did each area feel this week?</label><div class="balance-fields">${AREAS.map(a => `<label class="bal-row"><span>${icon(a.icon, `style="width:15px;height:15px;color:${a.color}"`)}${a.short}</span><input type="range" min="1" max="10" step="1" name="bal_${a.id}" value="${b[a.id] || 5}" style="--c:${a.color}"><b data-bal="${a.id}">${b[a.id] || 5}</b></label>`).join('')}</div></div>`;
-}
-function readBalance(fd) {
-  const out = {}; let any = false;
-  for (const a of AREAS) { const v = Number(fd.get('bal_' + a.id)); if (v) { out[a.id] = v; any = true; } }
-  return any ? out : null;
-}
+// ---------- Life balance ----------
 // Radar wheel: this week filled, the week before dashed
 function balanceWheel(cur, prev, size = 220) {
   const c = size / 2, R = size / 2 - 28, n = AREAS.length;
@@ -253,18 +246,19 @@ function balanceWheel(cur, prev, size = 220) {
     ${cur ? `<polygon class="wheel-shape" points="${poly(cur)}" fill="rgba(255,79,31,.18)" stroke="var(--ember)" stroke-width="2.5" stroke-linejoin="round"/>${AREAS.map((a, i) => { const [x, y] = pt(i, cur[a.id] || 0); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${a.color}"/>`; }).join('')}` : ''}
     ${labels}</svg>`;
 }
+// Scores itself from the last 7 days (see areaScores in flow.js); dashed is the 7 days before
 function lifeBalancePanel() {
-  const keys = Object.keys(D.reviews || {}).filter(k => D.reviews[k] && D.reviews[k].balance).sort();
-  const cur = keys.length ? D.reviews[keys[keys.length - 1]].balance : null, prev = keys.length > 1 ? D.reviews[keys[keys.length - 2]].balance : null;
+  const T = todayStr(), sc = areaScores(addDays(T, -6), T), cur = areaValues(sc), prev = areaValues(areaScores(addDays(T, -13), addDays(T, -7)));
   const goals = activeGoals();
-  const low = cur ? AREAS.slice().sort((a, b) => (cur[a.id] || 0) - (cur[b.id] || 0))[0] : null;
+  const scored = AREAS.filter(a => sc[a.id].score != null);
+  const low = scored.slice().sort((a, b) => sc[a.id].score - sc[b.id].score)[0];
   return `<section class="panel life-panel">
     <div class="life-wheel">${balanceWheel(cur, prev)}
-      <p class="muted" style="font-size:12px;text-align:center">${cur ? `From your review of ${dayName(keys[keys.length - 1], { day: 'numeric', month: 'short' })}${prev ? ' · dashed: the week before' : ''}` : 'Rate each area in your weekly review to see your balance here.'}</p></div>
+      <p class="muted" style="font-size:12px;text-align:center">Last 7 days, filled in from your data · dashed: the 7 days before</p></div>
     <div class="grow">
       <h3 style="margin-bottom:4px">${icon('balance', 'style="width:16px;height:16px;color:var(--ember);vertical-align:-2px"')} Your whole life</h3>
-      <p class="muted" style="font-size:13px;margin-bottom:12px">${low && cur[low.id] <= 5 ? `${low.label} feels lowest right now (${cur[low.id]}/10). One small goal or habit there would lift the whole wheel.` : 'Goals in every area, so studying hard never quietly costs you your health or your people.'}</p>
-      <div class="area-list">${AREAS.map(a => { const gs = goals.filter(g => (g.area || 'study') === a.id); const on = gs.filter(g => goalStatus(g).key === 'on').length; return `<button class="area-row ${UI.area === a.id ? 'on' : ''}" data-act="area-filter" data-area="${a.id}" style="--c:${a.color}"><span class="area-ic">${icon(a.icon)}</span><span class="grow"><b>${a.label}</b><span class="muted">${gs.length ? `${gs.length} goal${gs.length === 1 ? '' : 's'} · ${on} on track` : 'No goals yet'}</span></span>${cur ? `<span class="area-score">${cur[a.id] || '–'}</span>` : ''}</button>`; }).join('')}</div>
+      <p class="muted" style="font-size:13px;margin-bottom:12px">${low && sc[low.id].score <= 5 ? `${low.label} is lowest right now (${sc[low.id].score}/10). One small habit there lifts the whole wheel.` : 'Sleep, workouts, focus, Anki, journal, mood, people and your goals score each area automatically.'}</p>
+      <div class="area-list">${AREAS.map(a => { const gs = goals.filter(g => (g.area || 'study') === a.id); const s = sc[a.id]; return `<button class="area-row ${UI.area === a.id ? 'on' : ''}" data-act="area-filter" data-area="${a.id}" style="--c:${a.color}"><span class="area-ic">${icon(a.icon)}</span><span class="grow"><b>${a.label}</b><span class="muted">${esc([...s.bits.slice(0, 3), gs.length ? `${gs.length} goal${gs.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ') || 'No data yet')}</span></span><span class="area-score">${s.score ?? '–'}</span></button>`; }).join('')}</div>
     </div>
   </section>`;
 }
@@ -371,16 +365,17 @@ AFTER.people = (fresh) => { if (fresh) Motion.countUp($('#view')); };
 document.addEventListener('click', (e) => {
   const a = e.target.closest('[data-act]'); if (!a) return;
   switch (a.dataset.act) {
-    case 'habit-toggle': { const on = toggleHabit(a.dataset.goal, a.dataset.d || todayStr()); if (on) { burst(a); chime('start'); } rerender(); break; }
+    case 'habit-toggle': {
+      const g = D.goals.find(x => x.id === a.dataset.goal), d = a.dataset.d || todayStr();
+      if (g && !habitTicked(g.id, d) && habitAuto(g, d)) { toast(`Already done: ${habitAutoLabel(g).toLowerCase()}. It ticks itself.`); break; }
+      const on = toggleHabit(a.dataset.goal, d); if (on) { burst(a); chime('start'); } rerender(); break;
+    }
     case 'person-new': personModal(); break;
     case 'person-edit': personModal((D.people || []).find(p => p.id === a.dataset.id)); break;
     case 'person-connected': personConnected(a.dataset.id); burst(a); rerender(); break;
     case 'area-filter': UI.area = UI.area === a.dataset.area ? null : a.dataset.area; rerender(); break;
     case 'links-sync': a.classList.add('busy'); syncLinks(true).finally(() => a.classList.remove('busy')); break;
   }
-});
-document.addEventListener('input', (e) => {
-  if (e.target.name && e.target.name.startsWith('bal_')) { const b = $(`[data-bal="${e.target.name.slice(4)}"]`); if (b) b.textContent = e.target.value; }
 });
 setTimeout(() => syncLinks(), 12000);
 setInterval(() => syncLinks(), 6 * 3600e3);
