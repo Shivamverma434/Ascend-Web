@@ -42,6 +42,8 @@ async function syncHealth(manual = false) {
     const keep = addDays(todayStr(), -200);
     hc.sleep = sleep.filter(s => s.end.slice(0, 10) >= keep);
     hc.exercise = [...(hc.exercise || []).filter(e => e.date < from), ...(r.exercise || [])].filter(e => e.date >= keep);
+    // Meals logged in a food app: kept for 60 days (protein per meal)
+    if (Array.isArray(r.meals)) hc.meals = [...(hc.meals || []).filter(e => e.date < from), ...r.meals].filter(e => e.date >= addDays(todayStr(), -60));
     for (const k of Object.keys(hc.days)) if (k < keep) delete hc.days[k];
     hc.at = Date.now(); D.hc = hc; HCSYNC.error = '';
     if (typeof importHcWorkouts === 'function') importHcWorkouts();
@@ -397,7 +399,7 @@ function healthTodayCard() {
 function healthPanels() {
   const s = D.settings, st = HCSYNC.status;
   return `<section class="panel conn ${D.hc && D.hc.at ? 'on' : ''}" id="healthPanel">
-    <div class="conn-head"><span class="conn-ic hc">${icon('heart')}</span><div class="grow"><h3>Healthspan profile and Health Connect</h3><p class="muted" style="font-size:12.5px">${hcHere() ? 'Reads sleep stages, heart rate, HRV, steps, workouts and VO₂ max that your watch app (Zepp, Fitbit, Samsung Health…) shares with Health Connect.' : `Health Connect works on your phone. ${D.hc && D.hc.at ? 'Last read on the phone ' + ago(D.hc.at) + ', synced here through Google.' : 'Turn it on in Ascend on your phone.'}`}</p></div>
+    <div class="conn-head"><span class="conn-ic hc">${icon('heart')}</span><div class="grow"><h3>Healthspan profile and Health Connect</h3><p class="muted" style="font-size:12.5px">${hcHere() ? 'Reads sleep stages, heart rate, HRV, steps, workouts and VO₂ max from your watch app, and meals with their protein from your food app, through Health Connect.' : `Health Connect works on your phone. ${D.hc && D.hc.at ? 'Last read on the phone ' + ago(D.hc.at) + ', synced here through Google.' : 'Turn it on in Ascend on your phone.'}`}</p></div>
       ${ASCEND_IS_MOBILE && s.hcOn ? `<button type="button" class="btn sm" data-act="hc-sync">${icon('sync')}Sync now</button>` : ''}</div>
     <div class="row"><div class="field grow"><label>Date of birth</label><input class="input" type="date" name="dob" value="${esc(s.dob || '')}" max="${todayStr()}"></div>
     <div class="field grow"><label>Sex (for fitness norms)</label><select class="input" name="sex"><option value="male" ${s.sex !== 'female' ? 'selected' : ''}>Male</option><option value="female" ${s.sex === 'female' ? 'selected' : ''}>Female</option></select></div></div>

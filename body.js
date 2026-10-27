@@ -1,4 +1,4 @@
-/* Ascend: the body, beyond the watch. Protein in 4 meal slots with one-tap foods, lab results with the recheck
+/* Ascend: the body, beyond the watch. Protein in 4 meal slots, read from your food app through Health Connect, lab results with the recheck
    dates your doctor gives you, running guardrails (no long run more than 10% past your longest in 30 days), and back
    pain charted against lifting. Uses globals from app.js, health.js, flow.js, prep.js and daily.js. */
 'use strict';
@@ -8,7 +8,13 @@
 const MEALS = ['Breakfast', 'Lunch', 'Snack', 'Dinner'];
 const DEFAULT_FOODS = [['2 eggs', 12], ['Whey scoop', 24], ['Paneer 100 g', 18], ['Chicken 100 g', 27], ['Dal bowl', 9], ['Curd bowl', 8], ['Milk glass', 8], ['Soya chunks 50 g', 26]];
 const proteinFoods = () => Array.isArray(D.settings.proteinFoods) && D.settings.proteinFoods.length ? D.settings.proteinFoods : DEFAULT_FOODS;
-const proteinOn = (d) => ((D.protein || {})[d] || { items: [] }).items || [];
+// Meals come from your food app through Health Connect; its meal type picks the slot (or the time of day if it has none)
+const HC_MEAL_SLOT = { 1: 0, 2: 1, 4: 2, 3: 3 };
+const slotAt = (iso) => { const h = Number(String(iso).slice(11, 13)); return h < 11 ? 0 : h < 16 ? 1 : h < 19 ? 2 : 3; };
+const hcFood = () => !!(D.hc && Array.isArray(D.hc.meals) && D.hc.meals.length);
+const hcMealsOn = (d) => ((D.hc && D.hc.meals) || []).filter(m => m.date === d).map(m => ({ f: m.name || 'Meal', g: Math.round(m.protein || 0), s: HC_MEAL_SLOT[m.meal] ?? slotAt(m.time), hc: true }));
+const manualOn = (d) => ((D.protein || {})[d] || { items: [] }).items || [];
+const proteinOn = (d) => [...hcMealsOn(d), ...manualOn(d)];
 const proteinTotal = (d) => sum(proteinOn(d), x => x.g);
 const mealNow = () => { const h = new Date().getHours(); return h < 11 ? 0 : h < 16 ? 1 : h < 19 ? 2 : 3; };
 function addProtein(name, g, slot = mealNow()) {
@@ -19,12 +25,15 @@ function addProtein(name, g, slot = mealNow()) {
 }
 function proteinTodayCard() {
   const target = Number(D.settings.proteinTarget ?? 80); if (!target) return '';
-  const t = todayStr(), items = proteinOn(t), total = proteinTotal(t), slot = mealNow();
-  return `<section class="panel protein-card"><div class="panel-head"><h3>${icon('dumbbell', 'style="width:16px;height:16px;color:#0E9AA7;vertical-align:-2px"')} Protein</h3><span class="muted" style="font-size:12px">${total} / ${target} g</span></div>
+  const t = todayStr(), items = proteinOn(t), total = proteinTotal(t), slot = mealNow(), auto = hcFood(), manual = manualOn(t);
+  const setup = hcHere() ? `<button class="btn sm" data-act="hc-connect">${icon('heart')}Allow Nutrition in Health Connect</button>` : '';
+  return `<section class="panel protein-card"><div class="panel-head"><h3>${icon('dumbbell', 'style="width:16px;height:16px;color:#0E9AA7;vertical-align:-2px"')} Protein</h3><span class="muted" style="font-size:12px">${total} / ${target} g${auto ? ' · from your food app' : ''}</span></div>
     <div class="progress-bar thin"><i style="width:${Math.min(100, 100 * total / target)}%;background:#0E9AA7"></i></div>
     <div class="meal-slots">${MEALS.map((m, i) => { const g = sum(items.filter(x => x.s === i), x => x.g); return `<span class="meal ${g >= 20 ? 'hit' : ''} ${i === slot ? 'now' : ''}">${g >= 20 ? '✓ ' : ''}${m}<b>${g ? g + ' g' : ''}</b></span>`; }).join('')}</div>
-    <div class="food-chips">${proteinFoods().map(([n, g], i) => `<button class="chip" data-act="protein-add" data-i="${i}">${esc(n)} <b>${g}g</b></button>`).join('')}<button class="chip" data-act="protein-custom">${icon('plus')}Other</button>${items.length ? `<button class="chip ghost" data-act="protein-undo" title="Remove the last one">Undo</button>` : ''}</div>
-    <p class="muted" style="font-size:11.5px;margin-top:6px">Adds to ${MEALS[slot].toLowerCase()}. A meal ticks at 20 g.</p></section>`;
+    ${auto ? (items.length ? `<p class="muted" style="font-size:12px">${items.map(x => `${esc(x.f)} ${x.g} g`).join(' · ')}</p>` : '<p class="muted" style="font-size:12px">No meals logged in your food app yet today.</p>')
+      : `<div class="hc-food-setup"><p class="muted" style="font-size:12.5px">Log meals in a food app that shares nutrition with Health Connect (for example MyFitnessPal or Cronometer). Ascend reads the protein in each meal from there by itself.</p>${setup}</div>`}
+    ${UI.proteinManual || manual.length ? `<div class="food-chips" style="margin-top:8px">${proteinFoods().map(([n, g], i) => `<button class="chip" data-act="protein-add" data-i="${i}">${esc(n)} <b>${g}g</b></button>`).join('')}<button class="chip" data-act="protein-custom">${icon('plus')}Other</button>${manual.length ? `<button class="chip ghost" data-act="protein-undo" title="Remove the last one">Undo</button>` : ''}</div>`
+      : `<button class="btn ghost sm" data-act="protein-manual" style="margin-top:6px">Add a meal by hand</button>`}</section>`;
 }
 
 // ---------- Lab results ----------
@@ -106,6 +115,7 @@ document.addEventListener('click', (e) => {
   const a = e.target.closest('[data-act]'); if (!a) return;
   switch (a.dataset.act) {
     case 'protein-add': { const [n, g] = proteinFoods()[Number(a.dataset.i)] || []; if (n) { addProtein(n, g); burst(a); } break; }
+    case 'protein-manual': UI.proteinManual = true; rerender(); break;
     case 'protein-undo': { const r = (D.protein || {})[todayStr()]; if (r && r.items.length) { r.items = r.items.slice(0, -1); save(); rerender(); } break; }
     case 'protein-custom': {
       const m = modal(`<h2>Add protein</h2><form><div class="row"><div class="field grow"><label>Food</label><input class="input" name="f" required maxlength="40" placeholder="Rajma bowl"></div>
