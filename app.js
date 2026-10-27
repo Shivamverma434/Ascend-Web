@@ -215,10 +215,10 @@ function defaults() {
       weeklyDay: 0, weeklyTime: '10:00', journalMode: 'quick',
       notionUrl: '', calendarUrl: '', remindersOn: true, launchAtLogin: true, sound: true, onboarded: false, focusDefault: 25,
       googleUrl: '', googleKey: '', googleTasks: true, googleCalendar: true, googleCalendarRead: true,
-      intervalsKey: '', intervalsAthlete: '0', buddy: true, buddyName: 'Mochi', ankiOn: false, notionToken: '', notionAuto: true, dob: '', sex: 'male', maxHr: '', sleepBase: 7.5, heightCm: '', bodyFat: '', leanKg: '', weightKg: '', hcOn: false
+      intervalsKey: '', intervalsAthlete: '0', buddy: true, buddyName: 'Mochi', ankiOn: false, notionToken: '', notionAuto: true, dob: '', sex: 'male', maxHr: '', sleepBase: 7.5, heightCm: '', bodyFat: '', leanKg: '', weightKg: '', hcOn: false, chessSite: 'chess.com', chessUser: '', goodreadsUrl: ''
     },
     season: { name: 'Season 1', start: weekStart(t), weeks: 12 },
-    goals: [], days: {}, sessions: [], workouts: [], journal: {}, coach: [], reviews: {}, wellness: {}, exams: [], anki: null, hc: null,
+    goals: [], days: {}, sessions: [], workouts: [], journal: {}, coach: [], reviews: {}, wellness: {}, exams: [], anki: null, hc: null, people: [], habitLog: {}, links: null,
     activeSession: null, dismissedCarry: '', syncQueue: [], sync: {}, tomb: {}
   };
 }
@@ -329,8 +329,9 @@ function seasonInfo() {
 }
 
 function goalProgress(g, until = todayStr(), from = D.season.start) {
+  if (typeof isLevel === 'function' && isLevel(g)) return levelValue(g) ?? 0;
   const inRange = (d) => d >= from && d <= until;
-  let v = 0;
+  let v = typeof lifeProgress === 'function' ? lifeProgress(g, from, until) : 0;
   if (g.metric === 'hours') v += sum(D.sessions.filter(s => s.goalId === g.id && inRange(s.date)), s => s.minutes) / 60;
   if (g.metric === 'km') v += sum(D.workouts.filter(w => w.type === 'run' && inRange(w.date)), w => w.distance);
   if (g.metric === 'workouts') v += D.workouts.filter(w => inRange(w.date)).length;
@@ -341,17 +342,20 @@ function goalProgress(g, until = todayStr(), from = D.season.start) {
 }
 
 function goalStatus(g) {
+  if (typeof isLevel === 'function' && isLevel(g)) return levelStatus(g);
   const si = seasonInfo();
   const p = goalProgress(g);
-  if (p >= g.target) return { key: 'on', label: 'Done', p };
+  if (p >= goalTarget(g)) return { key: 'on', label: 'Done', p };
   if (si.dayNum < 7) return { key: 'new', label: 'Warming up', p };
-  const expected = g.target * si.frac;
+  const expected = goalTarget(g) * si.frac;
   const ratio = expected ? p / expected : 1;
   if (ratio >= 0.9) return { key: 'on', label: 'On track', p, ratio };
   if (ratio >= 0.6) return { key: 'adjust', label: 'Adjust', p, ratio };
   return { key: 'off', label: 'Off track', p, ratio };
 }
-function unitOf(g) { return g.metric === 'count' ? (g.unit || '') : METRICS[g.metric].unit; }
+function unitOf(g) { return g.metric === 'count' ? (g.unit || '') : (METRICS[g.metric] || {}).unit || ''; }
+// A habit's season target follows the season: times a week × weeks
+function goalTarget(g) { return g.metric === 'habit' ? (Number(g.times) || 3) * D.season.weeks : Number(g.target) || 1; }
 const activeGoals = () => D.goals.filter(g => !g.archived);
 
 // Weekly review helpers: a review covers the 7 days ending on the day it is done.
@@ -378,7 +382,7 @@ function weekStats(from, to) {
 }
 
 // ---------- Shell & navigation ----------
-const NAV = [['today', 'Today'], ['focus', 'Focus'], ['exams', 'Exams'], ['goals', 'Goals'], ['fitness', 'Fitness'], ['health', 'Healthspan'], ['journal', 'Journal'], ['review', 'Review'], ['coach', 'Coach'], ['settings', 'Settings']];
+const NAV = [['today', 'Today'], ['focus', 'Focus'], ['exams', 'Exams'], ['goals', 'Goals'], ['people', 'People'], ['fitness', 'Fitness'], ['health', 'Healthspan'], ['journal', 'Journal'], ['review', 'Review'], ['coach', 'Coach'], ['settings', 'Settings']];
 
 function renderNav() {
   const nav = $('#nav');
@@ -544,6 +548,8 @@ function viewToday() {
         <div class="panel-head"><h3>${icon('compass', 'style="width:16px;height:16px;color:var(--violet);vertical-align:-2px"')} This week's priorities</h3><span class="muted" style="font-size:12px">${pr.priorities.filter(p => p.done).length}/${pr.priorities.length}</span></div>
         ${pr.priorities.map(p => `<div class="target ${p.done ? 'done' : ''}" data-pid="${p.id}"><button class="check" data-act="toggle-prio" aria-label="Mark done">${icon('check', 'stroke-width="3"')}</button><span class="t-title">${esc(p.title)}</span></div>`).join('')}
       </section>` : ''}
+      ${typeof habitsTodayCard === 'function' ? habitsTodayCard() : ''}
+      ${typeof peopleTodayCard === 'function' ? peopleTodayCard() : ''}
       ${typeof examTodayCard === 'function' ? examTodayCard() : ''}
       ${typeof healthTodayCard === 'function' ? healthTodayCard() : ''}
       ${typeof ankiTodayCard === 'function' ? ankiTodayCard() : ''}
@@ -795,10 +801,11 @@ function finishSession(auto = false) {
 // ---------- GOALS / SEASON ----------
 function viewGoals() {
   const si = seasonInfo();
-  const goals = activeGoals();
-  const recs = recommendations(goals);
+  const all = activeGoals();
+  const goals = UI.area ? all.filter(g => (g.area || 'study') === UI.area) : all;
+  const recs = recommendations(goals.filter(g => !isLevel(g)));
   return `
-  <div class="view-head"><div><h1>Goals</h1><p class="sub">Big goals, broken into a ${D.season.weeks}-week season. An honest read on every one.</p></div>
+  <div class="view-head"><div><h1>Goals</h1><p class="sub">Every part of your life: study, health, mind, hobbies and people. An honest read on every goal and habit.</p></div>
     <button class="btn primary shine" data-act="new-goal">${icon('plus')}New goal</button></div>
 
   <section class="panel" style="margin-bottom:18px">
@@ -808,17 +815,21 @@ function viewGoals() {
       <div style="text-align:right"><div class="season-days" style="color:var(--ember)"><span data-count="${si.left}">${si.left}</span> days left</div><button class="btn sm ghost" data-act="edit-season">${icon('edit')}Edit season</button></div>
     </div>
     <div class="progress-bar" style="margin:12px 0 18px"><i style="width:${si.frac * 100}%"></i></div>
-    ${goals.length ? seasonChart(goals) : ''}
+    ${goals.filter(g => !isLevel(g)).length ? seasonChart(goals.filter(g => !isLevel(g))) : ''}
   </section>
+
+  ${typeof lifeBalancePanel === 'function' ? lifeBalancePanel() : ''}
 
   ${recs.length ? `<section class="panel" style="margin-bottom:18px"><div class="panel-head"><h3>${icon('coach', 'style="width:16px;height:16px;color:var(--violet);vertical-align:-2px" class="twinkle"')} Recommendations</h3></div>
     <div class="grid" style="gap:10px">${recs.map((r, i) => `<div class="target rec" style="--i:${i};align-items:flex-start;background:var(--mist-2)"><span class="dot" style="width:10px;height:10px;border-radius:50%;background:${r.color};margin-top:6px;flex:none"></span><div class="grow"><b>${esc(r.title)}</b><p class="muted" style="font-size:13px">${esc(r.text)}</p></div>${r.action ? `<button class="btn sm" data-act="${r.action}" data-goal="${r.goalId}">${esc(r.actionLabel)}</button>` : ''}<button class="btn sm ghost" data-go="coach:season">Chat with coach</button></div>`).join('')}</div></section>` : ''}
 
+  ${UI.area ? `<div class="carry"><p>Showing <b>${esc(areaOf({ area: UI.area }).label)}</b> goals.</p><button class="btn sm" data-act="area-filter" data-area="${UI.area}">Show all</button></div>` : ''}
   ${goals.length ? `<div class="goal-grid">${goals.map(goalCard).join('')}</div>` :
     `<section class="panel empty"><div class="empty-art">${icon('goals')}</div><h3>Set your first goal</h3><p>Pick something that matters this season: a skill, a fitness target, a project. Ascend tracks it from your focus sessions, runs and targets.</p><button class="btn primary" data-act="new-goal">${icon('plus')}Create a goal</button></section>`}`;
 }
 
 function goalCard(g, i) {
+  if (typeof lifeGoalCard === 'function' && (g.metric === 'habit' || isLevel(g))) return lifeGoalCard(g, i);
   const s = goalStatus(g);
   const pct = g.target ? clamp(s.p / g.target, 0, 1) * 100 : 0;
   const si = seasonInfo();
@@ -830,7 +841,7 @@ function goalCard(g, i) {
       <span class="chip status-${s.key}">${s.label}</span></div>
     <div><span class="g-num" data-count="${s.p}" data-fmt="dec">${s.p}</span> <span class="muted">/ ${g.target} ${esc(unitOf(g))}</span></div>
     <div class="progress-bar"><i style="width:${pct}%;background:${g.color}"></i></div>
-    <p class="muted" style="font-size:12.5px">${need > 0 ? `About ${round1(need / weeksLeft)} ${esc(unitOf(g))} a week to finish on time.` : 'Target hit. Raise the bar?'} ${esc(METRICS[g.metric].label)}.</p>
+    <p class="muted" style="font-size:12.5px">${need > 0 ? `About ${round1(need / weeksLeft)} ${esc(unitOf(g))} a week to finish on time.` : 'Target hit. Raise the bar?'} ${esc(METRICS[g.metric].label)}${g.metric === 'calendar' && g.keyword ? ` ("${esc(g.keyword)}")` : ''}.</p>
     <div class="g-actions">
       <button class="btn sm" data-act="log-goal" data-goal="${g.id}">${icon('plus')}Log progress</button>
       <button class="btn sm ghost" data-act="edit-goal" data-goal="${g.id}">${icon('edit')}Edit</button>
@@ -845,8 +856,8 @@ function recommendations(goals) {
   for (const g of goals) {
     const s = goalStatus(g);
     if (s.key === 'off' || s.key === 'adjust') {
-      const need = round1((g.target - s.p) / weeksLeft);
-      out.push({ goalId: g.id, color: g.color, title: `${g.name} is ${s.key === 'off' ? 'off track' : 'slipping'}`, text: `You are at ${s.p} of ${g.target} ${unitOf(g)}. To finish by ${dayName(si.end, { day: 'numeric', month: 'short' })} you need about ${need} ${unitOf(g)} a week. Put one small step for it in today's targets.`, action: 'rec-target', actionLabel: 'Add to today' });
+      const need = round1((goalTarget(g) - s.p) / weeksLeft);
+      out.push({ goalId: g.id, color: g.color, title: `${g.name} is ${s.key === 'off' ? 'off track' : 'slipping'}`, text: `You are at ${s.p} of ${goalTarget(g)} ${unitOf(g)}. To finish by ${dayName(si.end, { day: 'numeric', month: 'short' })} you need about ${need} ${unitOf(g)} a week. Put one small step for it in today's targets.`, action: 'rec-target', actionLabel: 'Add to today' });
     }
   }
   const fm = sum(range(addDays(todayStr(), -6), todayStr()), focusMinOn);
@@ -865,7 +876,7 @@ function seasonChart(goals) {
     const pts = [[0, 0]];
     for (let w = 1; w <= Math.min(si.week, weeks); w++) {
       const until = w === si.week ? todayStr() : addDays(D.season.start, w * 7 - 1);
-      pts.push([w === si.week ? si.dayNum / 7 : w, g.target ? 100 * goalProgress(g, until) / g.target : 0]);
+      pts.push([w === si.week ? si.dayNum / 7 : w, 100 * goalProgress(g, until) / goalTarget(g)]);
     }
     const last = pts[pts.length - 1];
     const proj = si.dayNum >= 7 ? clamp(last[1] / (last[0] / weeks), 0, 160) : null;
@@ -1179,7 +1190,7 @@ function viewReview() {
       <div class="panel"><h4 class="chart-title">Focus by day</h4>${barChart(days, { color: '#FF6B4A', unit: 'h', height: 140 })}</div>
       <div class="panel">
         <h4 class="chart-title">Goals this week</h4>
-        ${goals.map(g => { const delta = round1(goalProgress(g, key, from)); const s = goalStatus(g); return `<div class="g-week"><span class="dot" style="background:${g.color}"></span><b class="grow">${esc(g.name)}</b><span class="muted">+${delta} ${esc(unitOf(g))}</span><span class="chip status-${s.key}">${s.label}</span></div>`; }).join('') || '<p class="muted">No goals yet.</p>'}
+        ${goals.map(g => { const lvl = isLevel(g), delta = round1(goalProgress(g, key, from)); const s = goalStatus(g); return `<div class="g-week"><span class="dot" style="background:${g.color}"></span><b class="grow">${esc(g.name)}</b><span class="muted">${lvl ? (s.p ?? '–') : '+' + delta} ${esc(unitOf(g))}</span><span class="chip status-${s.key}">${s.label}</span></div>`; }).join('') || '<p class="muted">No goals yet.</p>'}
         <div class="row" style="gap:16px;margin-top:10px;flex-wrap:wrap">${ws.mood !== null ? `<span class="muted">Avg mood <b style="color:var(--ink)">${ws.mood}/5</b></span>` : ''}${ws.sleep !== null ? `<span class="muted">Avg sleep <b style="color:var(--ink)">${ws.sleep}h</b></span>` : ''}${ws.quality ? `<span class="muted">Focus quality <b style="color:var(--ink)">${ws.quality}%</b></span>` : ''}</div>
         ${prevPr.length ? `<div class="prev-prio"><span class="muted">Last week's priorities: ${prevPr.filter(p => p.done).length}/${prevPr.length} done</span>${prevPr.map(p => `<span class="chip ${p.done ? 'status-on' : 'status-off'}">${p.done ? '✓' : '✗'} ${esc(p.title)}</span>`).join('')}</div>` : ''}
       </div>
@@ -1189,6 +1200,7 @@ function viewReview() {
     <section class="panel">
       <form data-form="review">
         <div class="field"><label>How was your week?</label><div class="seg wide" data-rate>${WEEKRATE.map((l, i) => `<button type="button" data-v="${i + 1}" class="${UI.rate === i + 1 ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+        ${typeof balanceFields === 'function' ? balanceFields(rv) : ''}
         <div class="field"><label>Biggest win</label><textarea class="input" name="win" placeholder="What are you proud of this week?">${esc(rv.win || '')}</textarea></div>
         <div class="field"><label>What did not go well, and why?</label><textarea class="input" name="struggle" placeholder="Look at the numbers above. What pattern do you see?">${esc(rv.struggle || '')}</textarea></div>
         <div class="row"><div class="field grow"><label>Lesson to carry forward</label><input class="input" name="lesson" value="${esc(rv.lesson || '')}"></div>
@@ -1399,6 +1411,7 @@ function viewSettings() {
       </section>
       ${healthPanels()}
       ${integrationPanels()}
+      ${typeof lifeLinksPanel === 'function' ? lifeLinksPanel() : ''}
       <section class="panel">
         ${!g ? `<h3 class="set-h">${icon('calendar')} Calendar link (without Google sync)</h3>
         <div class="field"><label>Google Calendar private link (iCal)</label><input class="input" name="calendarUrl" value="${esc(s.calendarUrl)}" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"><span class="hint">Read-only. Google Calendar › Settings › your calendar › Integrate calendar › Secret address in iCal format.</span></div>` : `<input type="hidden" name="calendarUrl" value="${esc(s.calendarUrl)}">`}
@@ -1697,7 +1710,7 @@ document.addEventListener('click', async (e) => {
     case 'del-workout': { const w = D.workouts.find(x => x.id === a.dataset.id); if (w && w.extId) D.sync.ivIgnored = [...(D.sync.ivIgnored || []), w.extId]; D.workouts = D.workouts.filter(x => x.id !== a.dataset.id); save(); rerender(); break; }
     case 'iv-sync': a.classList.add('busy'); await syncIntervals(true); a.classList.remove('busy'); break;
     case 'iv-connect': go('settings'); setTimeout(() => { const f = $('[name=intervalsKey]'); if (f) { f.focus(); f.closest('.panel').classList.add('flash'); } }, 120); break;
-    case 'pause': D.activeSession.pausedAt = Date.now(); if (bridge.focusTimer) bridge.focusTimer(null); save(); go('focus', { soft: true }); break;
+    case 'pause': { D.activeSession.pausedAt = Date.now(); const s = D.activeSession; if (bridge.focusTimer) bridge.focusTimer(null, s.task, { paused: true, left: fmtMin(Math.max(0, s.planned - sessionElapsed(s) / 60)) }); save(); go('focus', { soft: true }); break; }
     case 'resume': { const s = D.activeSession; s.pausedMs += Date.now() - s.pausedAt; s.pausedAt = null; if (bridge.focusTimer) bridge.focusTimer(Date.now() + (s.planned * 60 - sessionElapsed(s)) * 1000, s.task); save(); go('focus', { soft: true }); startTimerLoop(); break; }
     case 'finish': finishSession(false); break;
     case 'discard': if (confirmInline(a, 'Discard?')) { D.activeSession = null; clearInterval(timerTick); if (bridge.focusTimer) bridge.focusTimer(null); save(); go('focus'); } break;
@@ -1791,7 +1804,7 @@ document.addEventListener('submit', (e) => {
       // and saving the stale, older values would quietly undo it on every device.
       const shown = UI.settingsForm || {}, now = formSnapshot(f);
       const changed = (k) => k in now && (!(k in shown) || shown[k] !== now[k]);
-      for (const k of ['name', 'buddyName', 'notionToken', 'dob', 'sex', 'maxHr', 'sleepBase', 'heightCm', 'bodyFat', 'leanKg', 'weightKg', 'activeStart', 'activeEnd', 'morningTime', 'journalTime', 'weeklyTime', 'calendarUrl', 'notionUrl', 'intervalsKey', 'intervalsAthlete']) if (changed(k)) s[k] = String(fd.get(k) || '').trim();
+      for (const k of ['name', 'buddyName', 'notionToken', 'dob', 'sex', 'maxHr', 'sleepBase', 'heightCm', 'bodyFat', 'leanKg', 'weightKg', 'activeStart', 'activeEnd', 'morningTime', 'journalTime', 'weeklyTime', 'calendarUrl', 'notionUrl', 'intervalsKey', 'intervalsAthlete', 'chessSite', 'chessUser', 'goodreadsUrl']) if (changed(k)) s[k] = String(fd.get(k) || '').trim();
       if (changed('nudgeEveryHours')) s.nudgeEveryHours = Number(fd.get('nudgeEveryHours')) || 2;
       if (changed('weeklyDay')) s.weeklyDay = Number(fd.get('weeklyDay')) || 0;
       for (const k of ['remindersOn', 'sound', 'launchAtLogin', 'buddy', 'notionAuto']) if (changed(k)) s[k] = fd.get(k) === 'on';
@@ -1801,6 +1814,7 @@ document.addEventListener('submit', (e) => {
       bridge.setLogin(s.launchAtLogin); save(); calCache.at = 0; loadCalendar(true); toast('Settings saved'); rerender();
       if (gEnabled() && D.sync.recurring && before !== JSON.stringify([s.morningTime, s.weeklyDay, s.weeklyTime])) setupRecurringEvents(false).then(() => toast('Calendar reminders moved to the new times')).catch(() => {});
       if (s.intervalsKey && !D.sync.intervalsAt) syncIntervals(true);
+      if (typeof syncLinks === 'function' && ['chessSite', 'chessUser', 'goodreadsUrl'].some(changed)) setTimeout(() => syncLinks(true), 300);
       break;
     }
   }
@@ -1837,6 +1851,7 @@ function saveReviewForm() {
   const rv = D.reviews[key] = D.reviews[key] || { priorities: [] };
   for (const k of ['win', 'struggle', 'lesson', 'stop']) rv[k] = String(fd.get(k) || '').trim();
   if (UI.rate) rv.rating = UI.rate;
+  if (typeof readBalance === 'function') rv.balance = readBalance(fd) || rv.balance;
   const titles = [0, 1, 2].map(i => String(fd.get('p' + i) || '').trim());
   const old = rv.priorities || [];
   const next = [];
@@ -1865,30 +1880,62 @@ function saveCoachReply(toTargets) {
 // ---------- Goal & season modals ----------
 function goalModal(g = null) {
   const isNew = !g;
-  g = g || { id: uid(), name: '', why: '', metric: 'hours', target: 50, unit: '', color: GOAL_COLORS[D.goals.length % GOAL_COLORS.length], logs: [] };
-  const m = modal(`<h2>${isNew ? 'New goal' : 'Edit goal'}</h2><p class="sub">Make it specific and measurable for this season.</p>
+  g = g || { id: uid(), name: '', why: '', area: UI.area || 'study', metric: 'hours', target: 50, unit: '', color: GOAL_COLORS[D.goals.length % GOAL_COLORS.length], logs: [] };
+  let area = g.area || 'study';
+  const metricOptions = (ar, cur) => {
+    const fits = Object.entries(METRICS).filter(([, v]) => !v.areas || v.areas.includes(ar)), rest = Object.entries(METRICS).filter(([, v]) => v.areas && !v.areas.includes(ar));
+    const opt = ([k, v]) => `<option value="${k}" ${cur === k ? 'selected' : ''}>${v.label}</option>`;
+    return `<optgroup label="Good for ${esc(areaOf({ area: ar }).label)}">${fits.map(opt).join('')}</optgroup>${rest.length ? `<optgroup label="Other ways">${rest.map(opt).join('')}</optgroup>` : ''}`;
+  };
+  const m = modal(`<h2>${isNew ? 'New goal' : 'Edit goal'}</h2><p class="sub">Pick the part of your life it belongs to, then how Ascend should measure it.</p>
     <form>
-      <div class="field"><label>Goal</label><input class="input" name="name" value="${esc(g.name)}" required maxlength="60" placeholder="Run a 10K, finish B.Ed. assignments, ship the workplan"></div>
+      <div class="field"><label>Life area</label><div class="area-pick">${AREAS.map(a => `<button type="button" data-area-pick="${a.id}" class="${a.id === area ? 'on' : ''}" style="--c:${a.color}">${icon(a.icon)}${a.short}</button>`).join('')}</div></div>
+      <div class="field"><label>Goal</label><input class="input" name="name" value="${esc(g.name)}" required maxlength="60" placeholder="Sleep 7.5 hours, play guitar 3× a week, call Mum every week"></div>
       <div class="field"><label>Why it matters to you</label><input class="input" name="why" value="${esc(g.why)}" maxlength="160" placeholder="Your reminders will show you this"></div>
-      <div class="row"><div class="field grow"><label>Track it by</label><select class="input" name="metric">${Object.entries(METRICS).map(([k, v]) => `<option value="${k}" ${g.metric === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></div>
-      <div class="field" style="width:120px"><label>Season target</label><input class="input" type="number" name="target" min="1" step="0.5" value="${g.target}" required></div>
-      <div class="field" style="width:120px" id="unitField"><label>Unit</label><input class="input" name="unit" value="${esc(g.unit)}" placeholder="chapters"></div></div>
-      <p class="hint muted" id="metricHint" style="font-size:12px;margin:-6px 0 14px">${METRICS[g.metric].hint}</p>
-      <div class="field"><label>Colour</label><div class="swatches">${GOAL_COLORS.map(c => `<button type="button" data-color="${c}" style="background:${c}" class="${c === g.color ? 'on' : ''}" aria-label="Colour"></button>`).join('')}</div></div>
+      <div class="row"><div class="field grow"><label>Track it by</label><select class="input" name="metric">${metricOptions(area, g.metric)}</select></div>
+        <div class="field" style="width:130px" id="targetField"><label id="targetLabel">Season target</label><input class="input" type="number" name="target" min="0" step="any" value="${g.target}" required></div>
+        <div class="field" style="width:130px" id="timesField"><label>How often</label><select class="input" name="times">${[1, 2, 3, 4, 5, 6, 7].map(n => `<option value="${n}" ${(Number(g.times) || 3) === n ? 'selected' : ''}>${n === 7 ? 'Every day' : n + '× a week'}</option>`).join('')}</select></div>
+        <div class="field" style="width:120px" id="unitField"><label>Unit</label><input class="input" name="unit" value="${esc(g.unit)}" placeholder="chapters"></div>
+        <div class="field" style="width:140px" id="keywordField"><label>Calendar keyword</label><input class="input" name="keyword" value="${esc(g.keyword || '')}" placeholder="Guitar"></div>
+        <div class="field" style="width:130px" id="dirField"><label>Direction</label><select class="input" name="dir"><option value="-1" ${Number(g.dir) !== 1 ? 'selected' : ''}>Go down to</option><option value="1" ${Number(g.dir) === 1 ? 'selected' : ''}>Go up to</option></select></div></div>
+      <p class="hint muted" id="metricHint" style="font-size:12px;margin:-6px 0 14px"></p>
+      <div class="field"><label>Colour</label><div class="swatches">${[...new Set([...GOAL_COLORS, ...AREAS.map(a => a.color)])].map(c => `<button type="button" data-color="${c}" style="background:${c}" class="${c === g.color ? 'on' : ''}" aria-label="Colour"></button>`).join('')}</div></div>
       <div class="modal-actions">${isNew ? '' : `<button type="button" class="btn ghost" data-local="archive" style="margin-right:auto;color:var(--off)">Archive goal</button>`}<button type="button" class="btn ghost" data-act="close-modal">Cancel</button><button class="btn primary" type="submit">${isNew ? 'Create goal' : 'Save'}</button></div>
     </form>`);
-  let color = g.color;
-  const syncUnit = () => { const mv = $('[name=metric]', m).value; $('#unitField', m).style.display = mv === 'count' ? '' : 'none'; $('#metricHint', m).textContent = METRICS[mv].hint; };
-  syncUnit(); $('[name=metric]', m).addEventListener('change', syncUnit);
+  let color = g.color, lastMetric = g.metric;
+  const show = (id, on) => { $('#' + id, m).style.display = on ? '' : 'none'; };
+  const syncFields = () => {
+    const mv = $('[name=metric]', m).value, meta = METRICS[mv] || {};
+    show('unitField', mv === 'count'); show('timesField', mv === 'habit'); show('keywordField', mv === 'calendar'); show('dirField', mv === 'weight'); show('targetField', mv !== 'habit');
+    $('[name=keyword]', m).required = mv === 'calendar';
+    $('#targetLabel', m).textContent = meta.kind === 'level' ? `Aim for (${meta.unit})` : 'Season target';
+    $('#metricHint', m).textContent = meta.hint || '';
+    if (mv !== lastMetric && METRIC_DEFAULTS[mv] != null && (isNew || mv !== g.metric)) $('[name=target]', m).value = METRIC_DEFAULTS[mv];
+    lastMetric = mv;
+  };
+  syncFields(); $('[name=metric]', m).addEventListener('change', syncFields);
   m.addEventListener('click', (e) => {
     const sw = e.target.closest('[data-color]'); if (sw) { color = sw.dataset.color; $$('[data-color]', m).forEach(b => b.classList.toggle('on', b === sw)); }
+    const ap = e.target.closest('[data-area-pick]');
+    if (ap) {
+      area = ap.dataset.areaPick; $$('[data-area-pick]', m).forEach(b => b.classList.toggle('on', b === ap));
+      const sel = $('[name=metric]', m), cur = sel.value; sel.innerHTML = metricOptions(area, cur);
+      if (isNew) sel.value = { health: 'sleep', mind: 'habit', hobbies: 'habit', people: 'habit', study: 'hours' }[area];
+      if (isNew) { color = areaOf({ area }).color; $$('[data-color]', m).forEach(b => b.classList.toggle('on', b.dataset.color === color)); }
+      syncFields();
+    }
     if (e.target.closest('[data-local=archive]')) { g.archived = true; save(); closeModal(); rerender(); toast('Goal archived'); }
   });
   $('form', m).addEventListener('submit', (e) => {
     e.preventDefault(); const fd = new FormData(e.target);
-    Object.assign(g, { name: String(fd.get('name')).trim(), why: String(fd.get('why') || '').trim(), metric: fd.get('metric'), target: Number(fd.get('target')) || 1, unit: String(fd.get('unit') || '').trim(), color });
+    const metric = fd.get('metric');
+    Object.assign(g, { area, name: String(fd.get('name')).trim(), why: String(fd.get('why') || '').trim(), metric, target: Number(fd.get('target')) || 1, unit: String(fd.get('unit') || '').trim(), color });
+    if (metric === 'habit') { g.times = Number(fd.get('times')) || 3; g.target = goalTarget(g); }
+    if (metric === 'calendar') g.keyword = String(fd.get('keyword') || '').trim();
+    if (metric === 'weight') g.dir = Number(fd.get('dir')) || -1;
     if (isNew) D.goals.push(g);
-    save(); closeModal(); go('goals'); if (isNew) { confetti(90); toast('Goal set. Let\'s climb.'); }
+    save(); closeModal(); go('goals'); if (isNew) { confetti(90); toast(metric === 'habit' ? 'Habit set. Tick it off on Today.' : 'Goal set. Let\'s climb.'); }
+    if (metric === 'calendar') setTimeout(() => syncLinks(), 400);
   });
 }
 
@@ -1965,10 +2012,11 @@ const AFTER = {
 function migrate(d) {
   const base = defaults();
   const out = { ...base, ...d, settings: { ...base.settings, ...(d.settings || {}) }, season: { ...base.season, ...(d.season || {}) } };
-  for (const k of ['goals', 'sessions', 'workouts', 'coach', 'syncQueue', 'exams']) if (!Array.isArray(out[k])) out[k] = [];
+  for (const k of ['goals', 'sessions', 'workouts', 'coach', 'syncQueue', 'exams', 'people']) if (!Array.isArray(out[k])) out[k] = [];
+  if (out.links && typeof out.links !== 'object') out.links = null;
   if (out.anki && (typeof out.anki !== 'object' || !out.anki.days)) out.anki = null;
   if (out.hc && (typeof out.hc !== 'object' || !out.hc.days)) out.hc = null;
-  for (const k of ['days', 'journal', 'reviews', 'wellness', 'sync', 'tomb']) if (!out[k] || typeof out[k] !== 'object' || Array.isArray(out[k])) out[k] = {};
+  for (const k of ['days', 'journal', 'reviews', 'wellness', 'sync', 'tomb', 'habitLog']) if (!out[k] || typeof out[k] !== 'object' || Array.isArray(out[k])) out[k] = {};
   if (out.activeSession && Date.now() - out.activeSession.start > 12 * 3600e3) out.activeSession = null;
   out.version = 2;
   return out;
@@ -1984,6 +2032,7 @@ async function boot() {
   save();
   go('today');
   if (!D.settings.onboarded) onboarding();
+  else if (typeof showQuoteSplash === 'function') showQuoteSplash();
   if (D.activeSession) startTimerLoop();
 
   bridge.on('navigate', (v) => {

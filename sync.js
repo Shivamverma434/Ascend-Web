@@ -483,12 +483,14 @@ async function syncEverything() {
     await Promise.allSettled([
       D.settings.intervalsKey ? syncIntervals() : null,
       typeof syncAnki === 'function' ? syncAnki() : null,
-      typeof syncHealth === 'function' ? syncHealth() : null
+      typeof syncHealth === 'function' ? syncHealth() : null,
+      typeof syncLinks === 'function' ? syncLinks() : null
     ]);
     await syncAll();
     if (D.settings.intervalsKey && IVSYNC.error) errors.push('intervals.icu: ' + IVSYNC.error);
     if (typeof ANKI !== 'undefined' && D.settings.ankiOn && !ASCEND_IS_MOBILE && ANKI.error) errors.push('Anki: ' + ANKI.error);
     if (typeof HCSYNC !== 'undefined' && D.settings.hcOn && ASCEND_IS_MOBILE && HCSYNC.error) errors.push('Health Connect: ' + HCSYNC.error);
+    if (typeof LINKS !== 'undefined' && LINKS.error) errors.push(LINKS.error);
     if (gEnabled() && GSYNC.error) errors.push('Google: ' + GSYNC.error);
     if (gEnabled() && CLOUD.error) errors.push((ASCEND_IS_MOBILE ? 'Laptop' : 'Phone') + ' sync: ' + CLOUD.error);
   } finally {

@@ -56,6 +56,15 @@
     } catch { return { error: 'Could not reach Notion' }; }
   }
 
+  // Hobby connections. Chess.com and Lichess allow browser requests; Goodreads does not, so the laptop or phone reads it.
+  const WEB_HOSTS = ['api.chess.com', 'lichess.org'];
+  async function web(url, accept) {
+    let u; try { u = new URL(url); } catch { return { error: 'Bad link' }; }
+    if (u.protocol !== 'https:' || !WEB_HOSTS.includes(u.hostname)) return { error: 'Read on your laptop or phone and synced here' };
+    try { const r = await fetch(url, { headers: { Accept: accept || '*/*' } }); return { status: r.status, text: await r.text() }; }
+    catch { return { error: 'Could not reach ' + u.hostname }; }
+  }
+
   // ---------- In-app animated pop-up (same design as the desktop one) ----------
   let popupFrame = null, popupQueue = [];
   function showPopup(payload) {
@@ -106,8 +115,8 @@
     closePopup: async () => closePopup(),
     popupAction: async (a) => runAction(a),
     setLogin: async () => {},
-    info: async () => ({ version: '1.3.7', platform: 'web' }),
-    google, intervals, notion,
+    info: async () => ({ version: '1.4.0', platform: 'web' }),
+    google, intervals, notion, web,
     anki: async () => ({ error: 'Anki is read on your laptop and synced here.' }),
     trayStatus: async () => {},
     // A web app on iPad cannot schedule reminders, so these quietly do nothing

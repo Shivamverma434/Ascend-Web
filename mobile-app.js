@@ -3,7 +3,7 @@
 'use strict';
 
 const TABS = [['today', 'Today'], ['focus', 'Focus'], ['journal', 'Journal'], ['fitness', 'Fitness']];
-const MORE = [['health', 'Healthspan', 'Ascend Age and Pace of Aging'], ['exams', 'Exams', 'Countdown and spaced revision'], ['goals', 'Goals', 'Season goals and progress'], ['review', 'Weekly review', 'Close the week, set priorities'], ['coach', 'Coach', 'Plan, review and pep talks with Claude'], ['settings', 'Settings', 'Reminders, connections, pairing']];
+const MORE = [['health', 'Healthspan', 'Ascend Age and Pace of Aging'], ['exams', 'Exams', 'Countdown and spaced revision'], ['goals', 'Goals', 'Goals, habits and life balance'], ['people', 'People', 'Keep in touch with those who matter'], ['review', 'Weekly review', 'Close the week, set priorities'], ['coach', 'Coach', 'Plan, review and pep talks with Claude'], ['settings', 'Settings', 'Reminders, connections, pairing']];
 let tabX = null;
 
 // ---------- Bottom tab bar ----------

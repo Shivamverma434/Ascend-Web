@@ -20,6 +20,9 @@ function recordList(d) {
   (d.exams || []).forEach(x => out.push(['x:' + x.id, x]));
   if (d.anki) out.push(['anki', d.anki]);
   if (d.hc) out.push(['hc', d.hc]);
+  if (d.links) out.push(['links', d.links]);
+  (d.people || []).forEach(p => out.push(['p:' + p.id, p]));
+  for (const [date, hs] of Object.entries(d.habitLog || {})) for (const [gid, h] of Object.entries(hs || {})) out.push(['h:' + date + ':' + gid, h]);
   for (const [date, dd] of Object.entries(d.days || {})) {
     (dd.targets || []).forEach(t => { t._d = date; out.push(['t:' + t.id, t]); });
     if (dd.checkin) out.push(['c:' + date, dd.checkin]);
@@ -118,6 +121,10 @@ function mergeData(L, Rraw) {
   out.exams = ordered('x:', L.exams, R.exams);
   out.anki = win.get('anki') || null;
   out.hc = win.get('hc') || null;
+  out.links = win.get('links') || null;
+  out.people = ordered('p:', L.people, R.people);
+  out.habitLog = {};
+  for (const [k, w] of win) if (k.startsWith('h:')) { const [, date, gid] = k.split(':'); (out.habitLog[date] = out.habitLog[date] || {})[gid] = w; }
 
   // Days: targets go to the day their winning version says; check-ins per date
   const dates = new Set([...Object.keys(L.days || {}), ...Object.keys(R.days || {})]);

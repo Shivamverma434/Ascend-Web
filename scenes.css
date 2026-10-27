@@ -1,0 +1,133 @@
+/* Ascend: opening quote and a moving scene for every section */
+
+/* ---------- Opening quote ---------- */
+.qs { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 32px; cursor: pointer; overflow: hidden;
+  background: radial-gradient(120% 90% at 20% 10%, color-mix(in srgb, var(--c) 30%, #FFF7F0) 0%, #FFF7F0 55%, #FFE9DD 100%); animation: qsIn .5s ease both; }
+.qs.out { animation: qsOut .6s ease forwards; }
+@keyframes qsIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes qsOut { to { opacity: 0; transform: scale(1.04); filter: blur(6px); } }
+.qs-bg i { position: absolute; border-radius: 50%; filter: blur(40px); opacity: .45; background: var(--c); animation: qsFloat 9s ease-in-out infinite alternate; }
+.qs-bg i:nth-child(1) { width: 40vmax; height: 40vmax; left: -10vmax; top: -12vmax; }
+.qs-bg i:nth-child(2) { width: 30vmax; height: 30vmax; right: -8vmax; bottom: -10vmax; background: var(--ember); opacity: .3; animation-duration: 11s; }
+.qs-bg i:nth-child(3) { width: 18vmax; height: 18vmax; right: 18%; top: 12%; background: #FFC24B; opacity: .3; animation-duration: 7s; }
+@keyframes qsFloat { to { transform: translate(6vmax, 4vmax) scale(1.15); } }
+.qs-body { position: relative; max-width: 760px; text-align: center; }
+.qs-area { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--c); background: rgba(255,255,255,.7); border-radius: 999px; padding: 6px 12px; margin-bottom: 22px; animation: qsWord .6s .1s both; }
+.qs-area svg { width: 15px; height: 15px; }
+.qs-text { font-family: var(--display); font-weight: 800; font-size: clamp(24px, 4.2vw, 46px); line-height: 1.2; letter-spacing: -.02em; color: var(--ink); }
+.qs-text span { display: inline-block; }
+.qs-author { margin-top: 18px; font-size: 15px; font-weight: 600; color: var(--ink-2); }
+.qs-author::before { content: '— '; }
+.qs-bar { position: absolute; left: 50%; bottom: 46px; width: 120px; height: 3px; margin-left: -60px; border-radius: 3px; background: rgba(0,0,0,.08); overflow: hidden; }
+.qs-bar i { display: block; height: 100%; background: var(--c); transform-origin: left; animation: qsBar var(--dur) linear both; }
+@keyframes qsBar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.qs-skip { position: absolute; bottom: 18px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--ink-3); }
+@keyframes qsWord { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+/* Five ways in, one picked at random each time */
+.qs-rise .qs-text span, .qs-rise .qs-author { animation: qsWord .55s cubic-bezier(.2,1.2,.4,1) both; animation-delay: calc(var(--i) * 70ms + .25s); }
+.qs-ink .qs-text span, .qs-ink .qs-author { animation: qsInk .9s ease both; animation-delay: calc(var(--i) * 85ms + .2s); }
+@keyframes qsInk { from { opacity: 0; filter: blur(14px); transform: scale(1.15); } to { opacity: 1; filter: none; transform: none; } }
+.qs-type .qs-text span, .qs-type .qs-author { animation: qsType .01s steps(1) both; animation-delay: calc(var(--i) * 120ms + .3s); }
+.qs-type .qs-text::after { content: ''; display: inline-block; width: 3px; height: .9em; margin-left: 4px; vertical-align: -.1em; background: var(--c); animation: qsCaret .8s steps(1) infinite; }
+@keyframes qsType { from { opacity: 0; } to { opacity: 1; } }
+@keyframes qsCaret { 50% { opacity: 0; } }
+.qs-sweep .qs-text { background: linear-gradient(90deg, var(--ink) 45%, var(--c) 50%, transparent 55%); background-size: 260% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: qsSweep 1.6s .2s ease-out both; }
+.qs-sweep .qs-author { animation: qsWord .6s 1.5s both; }
+@keyframes qsSweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.qs-bloom .qs-text span, .qs-bloom .qs-author { animation: qsBloom .7s cubic-bezier(.2,1.5,.4,1) both; animation-delay: calc(var(--i) * 60ms + .25s); }
+@keyframes qsBloom { from { opacity: 0; transform: scale(.3) rotate(-10deg); } to { opacity: 1; transform: none; } }
+.qs-bloom .qs-bg::after { content: ''; position: absolute; left: 50%; top: 50%; width: 140vmax; height: 140vmax; margin: -70vmax; background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--c) 10%, transparent) 0 6deg, transparent 6deg 18deg); animation: qsSpin 30s linear infinite; }
+@keyframes qsSpin { to { transform: rotate(360deg); } }
+
+/* ---------- Section scenes ---------- */
+.main { position: relative; }
+.view { position: relative; z-index: 1; }
+.scene { position: absolute; top: 4px; right: 28px; width: 230px; height: 138px; pointer-events: none; z-index: 0; opacity: .5; color: var(--sc, var(--ember)); }
+.scene svg { width: 100%; height: 100%; overflow: visible; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.scene .fill { fill: currentColor; stroke: none; }
+.scene-focus { --sc: var(--ember); }
+.scene-goals { --sc: #5A3CF0; }
+.scene-people { --sc: #D6247A; }
+.scene-fitness { --sc: #0E9AA7; }
+.scene-health { --sc: #0E9AA7; }
+.scene-journal { --sc: var(--ember); }
+.scene-review { --sc: #5A3CF0; }
+.scene-coach { --sc: #C9A400; }
+.scene-exams { --sc: #5A3CF0; }
+.scene-settings { --sc: var(--ink-3); }
+
+/* Focus: breathing rings and an orbit */
+.s-breath { transform-origin: 140px 60px; animation: sBreath 4s ease-in-out infinite; }
+.s-breath.d2 { animation-delay: .4s; opacity: .7; } .s-breath.d3 { animation-delay: .8s; opacity: .45; }
+@keyframes sBreath { 50% { transform: scale(1.12); } }
+.s-orbit { transform-origin: 140px 60px; animation: sSpin 8s linear infinite; }
+@keyframes sSpin { to { transform: rotate(360deg); } }
+/* Goals: a trail climbs the mountain to a flag */
+.s-ridge { opacity: .6; }
+.s-trail { stroke-dasharray: 4 6; stroke-dashoffset: 200; animation: sTrail 3s linear infinite; }
+@keyframes sTrail { to { stroke-dashoffset: 0; } }
+.s-flag { transform-origin: 136px 22px; animation: sWave 1.6s ease-in-out infinite; }
+@keyframes sWave { 50% { transform: skewY(-8deg); } }
+.s-sun { animation: sGlow 3s ease-in-out infinite; }
+@keyframes sGlow { 50% { opacity: .4; transform: translateY(-3px); } }
+/* People: a little network, each person pulsing in turn */
+.s-links path { stroke-width: 1.5; opacity: .5; stroke-dasharray: 5 5; animation: sTrail 6s linear infinite; }
+.s-node { transform-box: fill-box; transform-origin: center; animation: sPulse 2.5s ease-in-out infinite; animation-delay: calc(var(--i) * .4s); }
+@keyframes sPulse { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.45); } }
+/* Fitness: a heartbeat line running across */
+.s-ecg { stroke-dasharray: 260; stroke-dashoffset: 260; animation: sDraw 2.4s ease-in-out infinite; }
+@keyframes sDraw { 60% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+/* Healthspan: a turning DNA helix */
+.s-rung line { stroke-width: 1.5; opacity: .45; transform-box: fill-box; transform-origin: center; animation: sRung 2.6s ease-in-out infinite; animation-delay: calc(var(--i) * -.24s); }
+.s-rung .a { animation: sHelixA 2.6s ease-in-out infinite; animation-delay: calc(var(--i) * -.24s); }
+.s-rung .b { animation: sHelixB 2.6s ease-in-out infinite; animation-delay: calc(var(--i) * -.24s); }
+@keyframes sHelixA { 50% { transform: translateY(44px); opacity: .5; } }
+@keyframes sHelixB { 50% { transform: translateY(-44px); opacity: .5; } }
+@keyframes sRung { 50% { transform: scaleY(.05); } }
+/* Journal: ink writes a line, again and again */
+.s-ink { stroke-dasharray: 220; stroke-dashoffset: 220; animation: sDraw 3.4s ease-in-out infinite; }
+.s-pen { animation: sPen 3.4s ease-in-out infinite; transform-origin: 170px 58px; }
+@keyframes sPen { 0% { transform: translate(-140px, 22px); } 60% { transform: none; } 100% { transform: none; opacity: 0; } }
+/* Review: the week's page flips and gets a tick */
+.s-page { transform-origin: 134px 50px; animation: sFlip 3s ease-in-out infinite; opacity: .25; }
+@keyframes sFlip { 0%, 30% { transform: none; } 55% { transform: scaleY(-1); } 100% { transform: scaleY(-1); } }
+.s-check { stroke-dasharray: 50; stroke-dashoffset: 50; animation: sCheck 3s ease-in-out infinite; }
+@keyframes sCheck { 0%, 55% { stroke-dashoffset: 50; } 80%, 100% { stroke-dashoffset: 0; } }
+/* Coach: twinkling stars */
+.s-star { transform-box: fill-box; transform-origin: center; animation: sTwinkle 2.2s ease-in-out infinite; animation-delay: calc(var(--i) * .5s); }
+@keyframes sTwinkle { 0%, 100% { transform: scale(.6) rotate(0); opacity: .4; } 50% { transform: scale(1.1) rotate(45deg); opacity: 1; } }
+/* Exams: books bob, the cap lifts */
+.s-book { animation: sBob 2.4s ease-in-out infinite; animation-delay: calc(var(--i) * .2s); }
+@keyframes sBob { 50% { transform: translateX(6px); } }
+.s-cap { animation: sGlow 2.4s ease-in-out infinite; }
+/* Settings: gears turning */
+.s-gear { transform-box: fill-box; transform-origin: center; animation: sSpin 9s linear infinite; }
+.s-gear.rev { animation-direction: reverse; animation-duration: 6s; }
+
+/* Each section enters in its own way */
+.view.enter[data-v=focus] .view-head h1 { animation: vZoom .6s cubic-bezier(.2,1.3,.4,1) both; }
+.view.enter[data-v=goals] .view-head h1 { animation: vClimb .7s cubic-bezier(.2,1.3,.4,1) both; }
+.view.enter[data-v=people] .view-head h1 { animation: vSlide .6s cubic-bezier(.2,1.3,.4,1) both; }
+.view.enter[data-v=fitness] .view-head h1 { animation: vSprint .55s cubic-bezier(.2,1.1,.4,1) both; }
+.view.enter[data-v=health] .view-head h1 { animation: vBeat .9s ease both; }
+.view.enter[data-v=journal] .view-head h1 { animation: vInk .8s ease both; }
+.view.enter[data-v=review] .view-head h1 { animation: vFlip .7s ease both; }
+.view.enter[data-v=coach] .view-head h1 { animation: vSpark .7s cubic-bezier(.2,1.4,.4,1) both; }
+.view.enter[data-v=exams] .view-head h1 { animation: vClimb .6s ease both; }
+.view.enter[data-v=settings] .view-head h1 { animation: vSlide .5s ease both; }
+@keyframes vZoom { from { opacity: 0; transform: scale(.7); letter-spacing: .2em; } }
+@keyframes vClimb { from { opacity: 0; transform: translateY(30px) rotate(-4deg); } }
+@keyframes vSlide { from { opacity: 0; transform: translateX(-30px); } }
+@keyframes vSprint { from { opacity: 0; transform: translateX(-60px) skewX(-18deg); } 70% { transform: translateX(6px) skewX(4deg); } }
+@keyframes vBeat { 0% { opacity: 0; transform: scale(.9); } 30% { opacity: 1; transform: scale(1.06); } 45% { transform: scale(.98); } 60% { transform: scale(1.04); } }
+@keyframes vInk { from { opacity: 0; filter: blur(10px); } }
+@keyframes vFlip { from { opacity: 0; transform: perspective(400px) rotateX(70deg); transform-origin: top; } }
+@keyframes vSpark { from { opacity: 0; transform: scale(.5) rotate(-6deg); filter: brightness(2); } }
+
+@media (max-width: 1200px) { .scene { width: 160px; height: 96px; opacity: .32; right: 16px; } }
+/* Phone and iPad: smaller scene tucked under the top bar */
+.mobile .scene { top: calc(var(--sat, 0px) + 48px); right: 8px; width: 130px; height: 78px; opacity: .3; }
+
+@media (prefers-reduced-motion: reduce) {
+  .scene *, .qs *, .qs, .view.enter .view-head h1 { animation: none !important; }
+}
