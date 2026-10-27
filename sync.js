@@ -448,7 +448,7 @@ async function syncIntervals(manual = false) {
       const w = {
         id: 'iv-' + a.id, extId: String(a.id), source: 'intervals', date, at: a.start_date_local, type: ivType(a.type), name: a.name || '',
         minutes: Math.round((a.moving_time || a.elapsed_time || 0) / 60), distance: a.distance ? round1(a.distance / 1000) : 0,
-        avgHr: a.average_heartrate ? Math.round(a.average_heartrate) : null, load: a.icu_training_load ? Math.round(a.icu_training_load) : null,
+        avgHr: a.average_heartrate ? Math.round(a.average_heartrate) : null, maxHr: a.max_heartrate ? Math.round(a.max_heartrate) : null, load: a.icu_training_load ? Math.round(a.icu_training_load) : null,
         calories: a.calories ? Math.round(a.calories) : null, zones: Array.isArray(a.icu_hr_zone_times) ? a.icu_hr_zone_times.map(Number) : null, elevation: a.total_elevation_gain ? Math.round(a.total_elevation_gain) : null
       };
       const i = D.workouts.findIndex(x => x.extId === w.extId);
@@ -457,7 +457,7 @@ async function syncIntervals(manual = false) {
     const wl = await bridge.intervals(s.intervalsKey, `/athlete/${ath}/wellness?oldest=${oldest}&newest=${today}`);
     if (!wl.error && Array.isArray(wl.data)) for (const r of wl.data) {
       if (!r || !r.id) continue;
-      const v = { steps: r.steps ?? null, sleepSecs: r.sleepSecs ?? null, sleepScore: r.sleepScore ?? null, restingHR: r.restingHR ?? null, hrv: r.hrv ?? null, weight: r.weight ?? null, vo2max: r.vo2max ?? null };
+      const v = { steps: r.steps ?? null, sleepSecs: r.sleepSecs ?? null, sleepScore: r.sleepScore ?? null, restingHR: r.restingHR ?? null, hrv: r.hrv ?? null, weight: r.weight ?? null, vo2max: r.vo2max ?? null, ctl: r.ctl ?? null, atl: r.atl ?? null };
       if (Object.values(v).some(x => x !== null)) D.wellness[String(r.id).slice(0, 10)] = v;
     }
     if (typeof dedupeWorkouts === 'function') dedupeWorkouts();

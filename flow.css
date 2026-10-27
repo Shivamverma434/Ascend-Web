@@ -103,3 +103,9 @@
 .vital em { font-style: normal; font-size: 11px; color: var(--ink-3); }
 .vital-flag { font-style: normal; font-size: 10.5px; font-weight: 700; color: #8A3B00; }
 .mini-spark { width: 100%; height: 30px; margin-top: 4px; }
+/* 1.8: algorithms */
+.watch-card { border-left: 4px solid #E8930C; }
+.watch-card.red { border-left-color: #E5383B; background: #FFF4F2; }
+.watch-card h3 { color: #8A3B00; }
+.watch-card.red h3 { color: #B42318; }
+.lift-rate .seg button { flex: 1; min-width: 0; padding: 6px 0; }
