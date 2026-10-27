@@ -96,3 +96,10 @@
   .qb-bar { width: 60px; }
   .qb-row { flex-wrap: wrap; }
 }
+/* 1.7: body and vitals from Health Connect */
+.vital-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.vital { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--mist-2); font-size: 11.5px; color: var(--ink-2); }
+.vital b { font-family: var(--display); font-size: 18px; color: var(--ink); }
+.vital em { font-style: normal; font-size: 11px; color: var(--ink-3); }
+.vital-flag { font-style: normal; font-size: 10.5px; font-weight: 700; color: #8A3B00; }
+.mini-spark { width: 100%; height: 30px; margin-top: 4px; }

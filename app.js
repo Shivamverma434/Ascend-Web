@@ -244,6 +244,7 @@ function wellnessOn(date) {
   if (!h) return w || null;
   const m = { ...(w || {}) };
   for (const [k, hk] of [['steps', 'steps'], ['sleepSecs', 'sleepSecs'], ['restingHR', 'rhr'], ['hrv', 'hrv'], ['vo2max', 'vo2'], ['weight', 'weight']]) if (m[k] == null && h[hk] != null) m[k] = h[hk];
+  for (const k of ['fat', 'lean', 'heightCm', 'bmr', 'activeKcal', 'totalKcal', 'km', 'floors', 'waterL', 'spo2', 'resp', 'sys', 'dia', 'glucose', 'tempC']) if (m[k] == null && h[k] != null) m[k] = h[k];
   return m;
 }
 function sleepHours(date) { const w = wellnessOn(date); if (w && w.sleepSecs) return round1(w.sleepSecs / 3600); const c = (D.days[date] || {}).checkin; return c && c.sleepH ? Number(c.sleepH) : null; }
@@ -551,6 +552,7 @@ function viewToday() {
     </section>
 
     <div class="grid" style="align-content:start">
+      ${typeof hcMoreCard === 'function' ? hcMoreCard() : ''}
       ${focusTodayCard()}
       ${qbankTodayCard()}
       ${typeof insightTodayCard === 'function' ? insightTodayCard() : ''}

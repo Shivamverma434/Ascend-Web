@@ -47,6 +47,7 @@ async function syncHealth(manual = false) {
     for (const k of Object.keys(hc.days)) if (k < keep) delete hc.days[k];
     hc.at = Date.now(); D.hc = hc; HCSYNC.error = '';
     if (typeof importHcWorkouts === 'function') importHcWorkouts();
+    if (typeof autoProfile === 'function') autoProfile();
     save();
     if (['health', 'fitness', 'today'].includes(currentView) && !$('.scrim')) rerender();
     if (manual) toast(`Health Connect: ${Object.keys(r.days || {}).length} days, ${(r.sleep || []).length} nights read`);
@@ -406,9 +407,9 @@ function healthPanels() {
     <div class="row"><div class="field grow"><label>Max heart rate (optional)</label><input class="input" type="number" name="maxHr" min="120" max="230" value="${esc(s.maxHr || '')}" placeholder="${hrMax()}"></div>
     <div class="field grow"><label>Your sleep need (hours)</label><input class="input" type="number" name="sleepBase" step="0.25" min="6" max="10" value="${esc(s.sleepBase || 7.5)}"></div></div>
     <div class="row"><div class="field grow"><label>Height (cm)</label><input class="input" type="number" name="heightCm" min="120" max="230" value="${esc(s.heightCm || '')}"></div>
-    <div class="field grow"><label>Body fat % (smart scale)</label><input class="input" type="number" name="bodyFat" step="0.1" min="3" max="60" value="${esc(s.bodyFat || '')}"></div></div>
+    <div class="field grow"><label>Body fat % (filled from your scale)</label><input class="input" type="number" name="bodyFat" step="0.1" min="3" max="60" value="${esc(s.bodyFat || '')}"></div></div>
     <div class="row"><div class="field grow"><label>Lean mass kg (DXA, optional)</label><input class="input" type="number" name="leanKg" step="0.1" min="25" max="130" value="${esc(s.leanKg || '')}"></div>
-    <div class="field grow"><label>Weight kg (if your watch has none)</label><input class="input" type="number" name="weightKg" step="0.1" min="30" max="250" value="${esc(s.weightKg || '')}"></div></div>
+    <div class="field grow"><label>Weight kg (filled from Health Connect)</label><input class="input" type="number" name="weightKg" step="0.1" min="30" max="250" value="${esc(s.weightKg || '')}"></div></div>
     <p class="hint muted" style="font-size:12px">Height with body fat % or lean mass gives the lean body mass metric in Healthspan.</p>
     ${hcHere() ? `<div class="row wrap">${st && st.available === false ? `<p class="muted" style="font-size:12.5px">${st.needsInstall ? 'Install or update the Health Connect app from the Play Store first.' : 'Health Connect is not available on this phone.'}</p>` : `<button type="button" class="btn ${s.hcOn ? '' : 'primary'} sm" data-act="hc-connect">${icon('heart')}${s.hcOn ? 'Check permissions' : 'Connect Health Connect'}</button>`}
       ${st && st.total ? `<span class="muted" style="font-size:12.5px">${st.granted}/${st.total} data types allowed</span>` : ''}${HCSYNC.error ? `<span style="font-size:12.5px;color:var(--off)">${esc(HCSYNC.error)}</span>` : ''}</div>
