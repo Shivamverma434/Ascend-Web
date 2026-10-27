@@ -8,6 +8,9 @@ const DEVICE_KEYS = ['launchAtLogin', 'ankiOn', 'hcOn'];                    // s
 const LOCAL_ONLY = ['activeSession', 'syncQueue', 'sync', 'dismissedCarry']; // never leave the device
 const TRANSIENT = ['dirty', 'rev', 'syncError'];          // per-device Google Tasks bookkeeping
 const CLOUD = { busy: false, error: '', lastOk: 0, needsUpdate: false, dirty: false };
+// Lists of records (QBank blocks, grand tests, mistakes, lab results) and per-day records (protein, reserve days)
+const LISTS = [['qbank', 'q:'], ['gts', 'gt:'], ['mistakes', 'm:'], ['labs', 'l:']];
+const DAYMAPS = [['protein', 'pr:'], ['reserve', 'rs:']];
 let stampCache = null;
 let cloudTimer = null;
 
@@ -23,6 +26,9 @@ function recordList(d) {
   if (d.links) out.push(['links', d.links]);
   (d.people || []).forEach(p => out.push(['p:' + p.id, p]));
   for (const [date, hs] of Object.entries(d.habitLog || {})) for (const [gid, h] of Object.entries(hs || {})) out.push(['h:' + date + ':' + gid, h]);
+  for (const [date, hs] of Object.entries(d.habitSkip || {})) for (const [gid, h] of Object.entries(hs || {})) out.push(['hs:' + date + ':' + gid, h]);
+  for (const [key, p] of LISTS) (d[key] || []).forEach(x => out.push([p + x.id, x]));
+  for (const [key, p] of DAYMAPS) for (const [date, x] of Object.entries(d[key] || {})) out.push([p + date, x]);
   for (const [date, dd] of Object.entries(d.days || {})) {
     (dd.targets || []).forEach(t => { t._d = date; out.push(['t:' + t.id, t]); });
     if (dd.checkin) out.push(['c:' + date, dd.checkin]);
@@ -125,6 +131,10 @@ function mergeData(L, Rraw) {
   out.people = ordered('p:', L.people, R.people);
   out.habitLog = {};
   for (const [k, w] of win) if (k.startsWith('h:')) { const [, date, gid] = k.split(':'); (out.habitLog[date] = out.habitLog[date] || {})[gid] = w; }
+  out.habitSkip = {};
+  for (const [k, w] of win) if (k.startsWith('hs:')) { const [, date, gid] = k.split(':'); (out.habitSkip[date] = out.habitSkip[date] || {})[gid] = w; }
+  for (const [key, p] of LISTS) out[key] = ordered(p, L[key], R[key]);
+  for (const [key, p] of DAYMAPS) { out[key] = {}; for (const [k, w] of win) if (k.startsWith(p)) out[key][k.slice(p.length)] = w; }
 
   // Days: targets go to the day their winning version says; check-ins per date
   const dates = new Set([...Object.keys(L.days || {}), ...Object.keys(R.days || {})]);

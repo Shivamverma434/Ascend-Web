@@ -5,7 +5,7 @@
 'use strict';
 
 // ---------- Tabs inside tabs ----------
-const subTabs = (key, opts, cur) => `<div class="seg big-seg">${opts.map(([id, label]) => `<button type="button" data-sub="${key}:${id}" class="${cur === id ? 'on' : ''}">${label}</button>`).join('')}</div>`;
+const subTabs = (key, opts, cur) => `<div class="seg big-seg">${opts.map(([id, label]) => `<button type="button" data-subtab="${key}:${id}" class="${cur === id ? 'on' : ''}">${label}</button>`).join('')}</div>`;
 VIEWS.health = () => {
   const t = UI.htab === 'span' ? 'span' : 'train';
   const tabs = subTabs('htab', [['train', 'Training'], ['span', 'Healthspan']], t);
@@ -18,8 +18,8 @@ VIEWS.goals = () => {
 };
 for (const k of ['fitness', 'review', 'people']) delete VIEWS[k];
 document.addEventListener('click', (e) => {
-  const b = e.target.closest('[data-sub]'); if (!b) return;
-  const [k, v] = b.dataset.sub.split(':'); UI[k] = v; go(currentView);
+  const b = e.target.closest('[data-subtab]'); if (!b) return;
+  const [k, v] = b.dataset.subtab.split(':'); UI[k] = v; go(currentView);
 });
 // The tab bar always opens a tab's main page; Journal opens on the weekly review when it is due
 document.addEventListener('click', (e) => {
@@ -147,6 +147,9 @@ function areaScores(from, to) {
   const weekly = sum(activeGoals().filter(g => (g.area || 'study') === 'study' && g.metric === 'hours'), g => g.target / D.season.weeks) || 20;
   add('study', fh / (weekly * n / 7), `${round1(fh)}h focus`);
   if (D.anki && D.anki.days) { const ad = days.filter(d => D.anki.days[d]).length; add('study', ad / n, `Anki ${ad}/${n} days`); }
+  // Questions count most: they are what PG exams score
+  const qb = typeof qbIn === 'function' ? qbIn(from, to) : { n: 0 }, qDaily = Number(D.settings.qbankDaily) || 0;
+  if (qDaily || qb.n) { add('study', qDaily ? qb.n / (qDaily * n) : 1, `${qb.n} questions${qb.n ? `, ${pctOf(qb)}%` : ''}`); if (qb.n >= 20) add('study', (pctOf(qb) - 40) / 40, null); }
   // Health
   const sl = days.map(sleepHours).filter(x => x != null);
   if (sl.length >= 3) { const h = mean(sl); add('health', (h - 5) / 2.5, `${round1(h)}h sleep`); }
@@ -181,39 +184,57 @@ function lifeBalanceMini(from, to) {
 }
 
 // ---------- Insights: what your own data says ----------
+// Two-sided p-value for Welch's t, through a normal approximation of the t distribution (good enough to rank)
+function welchP(A, B) {
+  const ma = mean(A), mb = mean(B), va = sum(A, x => (x - ma) ** 2) / (A.length - 1), vb = sum(B, x => (x - mb) ** 2) / (B.length - 1);
+  const se = Math.sqrt(va / A.length + vb / B.length); if (!se) return ma === mb ? 1 : 0;
+  const t = Math.abs(ma - mb) / se, df = (va / A.length + vb / B.length) ** 2 / ((va / A.length) ** 2 / (A.length - 1) + (vb / B.length) ** 2 / (B.length - 1));
+  const z = t * (1 - 1 / (4 * df)) / Math.sqrt(1 + t * t / (2 * df));
+  const p = (x) => { const k = 1 / (1 + 0.2316419 * x); return 0.3989423 * Math.exp(-x * x / 2) * k * (0.3193815 + k * (-0.3565638 + k * (1.781478 + k * (-1.821256 + k * 1.330274)))); };
+  return 2 * p(z);
+}
+// Comparisons across your own days, built to be trusted: at least 5 days on each side, the number of days shown,
+// the gap in real units, and a confidence label after a false-discovery correction (Benjamini-Hochberg) across every
+// comparison tried. Recomputed weekly on data up to last Sunday, so the list does not jump around day to day.
 function insights(back = 90) {
-  const T = todayStr(), bedT = nightMin(hhmmMin(D.settings.bedTime || '00:30'));
-  // Focus only counts on days you used the timer, so a day off does not read as a day of zero focus
-  const days = range(addDays(T, -back), addDays(T, -1)).map(d => ({ d, sleep: sleepHours(d), focus: focusMinOn(d) || null, mood: moodOn(d), energy: ((D.days[d] || {}).checkin || {}).energy || null, gym: workoutsOn(d).length > 0, steps: (wellnessOn(d) || {}).steps || null, bed: bedMin(d) }));
-  const out = [];
-  // Compare one number across two kinds of day; needs 4+ days of each
+  const end = addDays(weekStart(todayStr()), -1), bedT = nightMin(hhmmMin(D.settings.bedTime || '00:30'));
+  // Focus counts only on days you used the timer, QBank accuracy only on days with 20+ questions
+  const days = range(addDays(end, -back + 1), end).map(d => { const q = typeof qbSum === 'function' ? qbSum(qbOn(d)) : { n: 0 }; return { d, sleep: sleepHours(d), focus: focusMinOn(d) || null, qacc: q.n >= 20 ? 100 * q.c / q.n : null, mood: moodOn(d), energy: ((D.days[d] || {}).checkin || {}).energy || null, gym: workoutsOn(d).length > 0, steps: (wellnessOn(d) || {}).steps || null, bed: bedMin(d) }; });
+  const tests = [];
   const test = (a, b, get, make) => {
     const A = days.filter(a).map(get).filter(v => v != null), B = days.filter(b).map(get).filter(v => v != null);
-    if (A.length < 4 || B.length < 4) return;
-    const r = make(mean(A), mean(B), A.length + B.length); if (r) out.push(r);
+    if (A.length < 5 || B.length < 5) return;
+    const r = make(mean(A), mean(B)); if (r) tests.push({ ...r, na: A.length, nb: B.length, p: welchP(A, B) });
   };
   const pct = (x, y) => y > 0 ? Math.round(100 * (x - y) / y) : null;
-  const focusLine = (cond, icn) => (x, y, n) => { const p = pct(x, y); if (p == null || Math.abs(p) < 10 || Math.min(x, y) < 15) return null; return { icon: icn, size: Math.abs(p), text: `You focus ${Math.abs(p)}% ${p > 0 ? 'more' : 'less'} ${cond} (${fmtMin(x)} vs ${fmtMin(y)}).`, n }; };
-  const moodLine = (cond, icn) => (x, y, n) => { const dlt = round1(x - y); if (Math.abs(dlt) < 0.3) return null; return { icon: icn, size: Math.abs(dlt) * 25, text: `Your mood is ${Math.abs(dlt)} points ${dlt > 0 ? 'higher' : 'lower'} ${cond} (${round1(x)} vs ${round1(y)} out of 5).`, n }; };
-  const slept = (x) => x.sleep != null;
-  test(x => slept(x) && x.sleep >= 7, x => slept(x) && x.sleep < 6.5, x => x.focus, focusLine('after nights of 7h+ sleep than after nights under 6.5h', 'moon'));
-  test(x => slept(x) && x.sleep >= 7, x => slept(x) && x.sleep < 6.5, x => x.mood, moodLine('after 7h+ sleep than after under 6.5h', 'moon'));
-  test(x => slept(x) && x.sleep >= 7, x => slept(x) && x.sleep < 6.5, x => x.energy, (a, b, n) => { const dlt = round1(a - b); return Math.abs(dlt) < 0.3 ? null : { icon: 'bolt', size: Math.abs(dlt) * 25, text: `Your morning energy is ${Math.abs(dlt)} points ${dlt > 0 ? 'higher' : 'lower'} after 7h+ sleep (${round1(a)} vs ${round1(b)} out of 5).`, n }; });
+  const focusLine = (cond, icn) => (x, y) => { const p = pct(x, y); if (p == null || Math.abs(p) < 10 || Math.min(x, y) < 15) return null; return { icon: icn, size: Math.abs(p), text: `You focus ${Math.abs(p)}% ${p > 0 ? 'more' : 'less'} ${cond} (${fmtMin(x)} vs ${fmtMin(y)}).` }; };
+  const pointsLine = (what, cond, icn) => (x, y) => { const dlt = round1(x - y); if (Math.abs(dlt) < 0.3) return null; return { icon: icn, size: Math.abs(dlt) * 25, text: `Your ${what} is ${Math.abs(dlt)} points ${dlt > 0 ? 'higher' : 'lower'} ${cond} (${round1(x)} vs ${round1(y)} out of 5).` }; };
+  const accLine = (cond, icn) => (x, y) => { const dlt = Math.round(x - y); if (Math.abs(dlt) < 4) return null; return { icon: icn, size: Math.abs(dlt) * 3, text: `Your QBank accuracy is ${Math.abs(dlt)} points ${dlt > 0 ? 'higher' : 'lower'} ${cond} (${Math.round(x)}% vs ${Math.round(y)}%).` }; };
+  const longSleep = x => x.sleep != null && x.sleep >= 7, shortSleep = x => x.sleep != null && x.sleep < 6.5;
+  test(longSleep, shortSleep, x => x.focus, focusLine('after nights of 7h+ sleep than after nights under 6.5h', 'moon'));
+  test(longSleep, shortSleep, x => x.qacc, accLine('after nights of 7h+ sleep than after nights under 6.5h', 'moon'));
+  test(longSleep, shortSleep, x => x.mood, pointsLine('mood', 'after 7h+ sleep than after under 6.5h', 'moon'));
+  test(longSleep, shortSleep, x => x.energy, pointsLine('morning energy', 'after 7h+ sleep than after under 6.5h', 'bolt'));
   test(x => x.bed != null && x.bed <= bedT, x => x.bed != null && x.bed > bedT + 60, x => x.focus, focusLine(`after asleep by ${fmtHM(D.settings.bedTime || '00:30')} than after asleep an hour or more later`, 'moon'));
-  test(x => x.gym, x => !x.gym, x => x.mood, moodLine('on days you train', 'run'));
+  test(x => x.bed != null && x.bed <= bedT, x => x.bed != null && x.bed > bedT + 60, x => x.qacc, accLine(`after asleep by ${fmtHM(D.settings.bedTime || '00:30')} than after asleep an hour later`, 'moon'));
+  test(x => x.gym, x => !x.gym, x => x.mood, pointsLine('mood', 'on days you train', 'run'));
   test(x => x.gym, x => !x.gym, x => x.focus, focusLine('on days you train', 'run'));
-  test(x => x.steps >= 8000, x => x.steps != null && x.steps < 5000, x => x.mood, moodLine('on 8k+ step days than under 5k', 'walk'));
-  return out.sort((a, b) => b.size - a.size);
+  test(x => x.steps >= 8000, x => x.steps != null && x.steps < 5000, x => x.mood, pointsLine('mood', 'on 8k+ step days than under 5k', 'walk'));
+  // Benjamini-Hochberg: adjust each p for how many comparisons were tried, then keep the ones that survive
+  const m = Math.max(1, tests.length), byP = tests.slice().sort((a, b) => a.p - b.p);
+  let run = 1;
+  for (let i = byP.length - 1; i >= 0; i--) { run = Math.min(run, byP[i].p * m / (i + 1)); byP[i].q = run; }
+  return tests.filter(t => t.q < 0.2).map(t => ({ ...t, conf: t.q < 0.05 ? 'High' : 'Medium' })).sort((a, b) => (a.conf === b.conf ? b.size - a.size : a.conf === 'High' ? -1 : 1));
 }
 function insightsPanel() {
   const ins = memo('insights', () => insights());
-  return `<section class="panel"><div class="panel-head"><h3>${icon('bolt', 'style="width:16px;height:16px;color:var(--violet);vertical-align:-2px"')} What your data says</h3><span class="muted" style="font-size:12px">last 90 days</span></div>
-    ${ins.length ? ins.slice(0, 5).map((x, i) => `<div class="tip-row" style="--i:${i}"><span class="tip-ic">${icon(x.icon)}</span><div><p>${esc(x.text)}</p><span class="muted" style="font-size:11.5px">${x.n} days compared</span></div></div>`).join('')
-      : '<p class="muted">Needs about 2 weeks of sleep, check-ins and focus sessions. Then Ascend shows what moves your focus and mood.</p>'}</section>`;
+  return `<section class="panel"><div class="panel-head"><h3>${icon('bolt', 'style="width:16px;height:16px;color:var(--violet);vertical-align:-2px"')} What your data says</h3><span class="muted" style="font-size:12px">90 days to last Sunday</span></div>
+    ${ins.length ? ins.slice(0, 5).map((x, i) => `<div class="tip-row" style="--i:${i}"><span class="tip-ic">${icon(x.icon)}</span><div><p>${esc(x.text)}</p><span class="muted" style="font-size:11.5px"><span class="conf-tag ${x.conf.toLowerCase()}">${x.conf} confidence</span> · ${x.na} vs ${x.nb} days · a pattern in your days, not proof of cause</span></div></div>`).join('')
+      : '<p class="muted">Nothing clear yet. Ascend only shows a pattern with at least 5 days on each side that holds up after correcting for every comparison it tried. Updated every Monday.</p>'}</section>`;
 }
 function insightTodayCard() {
   const x = memo('insights', () => insights())[0]; if (!x) return '';
-  return `<section class="panel insight-card" data-go="review"><h3>${icon('bolt', 'style="width:16px;height:16px;color:var(--violet);vertical-align:-2px"')} Insight</h3><p style="font-size:13.5px;margin-top:4px">${esc(x.text)}</p></section>`;
+  return `<section class="panel insight-card" data-go="review"><h3>${icon('bolt', 'style="width:16px;height:16px;color:var(--violet);vertical-align:-2px"')} Insight <span class="conf-tag ${x.conf.toLowerCase()}">${x.conf}</span></h3><p style="font-size:13.5px;margin-top:4px">${esc(x.text)}</p></section>`;
 }
 
 // ---------- Bedtime ----------

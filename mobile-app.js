@@ -119,7 +119,9 @@ async function planNotifications() {
     if (parseDay(d).getDay() === Number(s.weeklyDay)) { const wt = at(s.weeklyTime); if (wt > now && !(i === 0 && reviewedThisWeek())) list.push({ id: 3000 + i, title: 'Weekly review 📅', body: 'Was this week spent on what matters most? Ten honest minutes, then set next week\'s top 3.', at: wt, extra: { kind: 'weekly', view: 'review' } }); }
     const lead = Number(s.bedLead ?? 30), bt = bedtimeAt(d);
     if (lead > 0 && bt > now) { const tx = bedtimeText(); list.push({ id: 5000 + i, title: 'Bedtime 🌙', body: tx.title + ' ' + tx.body.replace(/ Last night.*$/, ''), at: bt, extra: { kind: 'bedtime', view: 'today' } }); }
-    if (i < 3) {
+    // Plan-linked reminders: your timed targets for today and tomorrow, at most 3 a day
+    if (i < 2) planPrompts(d).forEach((t, k) => { const at0 = at(t.time); if (at0 > now) { const p = planText(t); list.push({ id: 6000 + i * 10 + k, title: p.title, body: p.body, at: at0, extra: { kind: 'plan', view: 'focus', task: t.title } }); } });
+    if (i < 3 && s.nudgeMode === 'hours' && !offDay(d)) {
       const every = (Number(s.nudgeEveryHours) || 2) * 3600e3, end = at(s.activeEnd);
       let t = new Date(+at(s.activeStart) + every), k = 0;
       const used = new Set();
@@ -162,6 +164,7 @@ window.onBooted = function () {
   if (D.settings.onboarded) { bridge.notifications.setup().then(planNotifications); }
   bridge.on('notification', (ex) => {
     if (ex.kind === 'focus') { go('focus'); return; }
+    if (ex.kind === 'plan') { UI.focusTask = ex.task || ''; go('focus'); return; }
     if (ex.kind === 'nudge') { go('today'); setTimeout(() => { const n = buildNudge('nudge', true); if (n) bridge.showPopup(n); }, 700); return; }
     go(ex.view || 'today');
   });

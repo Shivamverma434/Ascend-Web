@@ -212,13 +212,13 @@ function defaults() {
     version: 2,
     settings: {
       name: '', activeStart: '08:00', activeEnd: '22:00', nudgeEveryHours: 2, morningTime: '08:30', journalTime: '21:30',
-      weeklyDay: 0, weeklyTime: '10:00', journalMode: 'quick', bedTime: '00:30', bedLead: 30,
+      weeklyDay: 0, weeklyTime: '10:00', journalMode: 'quick', bedTime: '00:30', bedLead: 30, bedGoal: '00:00', wakeTime: '08:00', nudgeMode: 'plan', restUntil: '', qbankDaily: 0, proteinTarget: 80,
       notionUrl: '', calendarUrl: '', remindersOn: true, launchAtLogin: true, sound: true, onboarded: false, focusDefault: 25,
       googleUrl: '', googleKey: '', googleTasks: true, googleCalendar: true, googleCalendarRead: true,
       intervalsKey: '', intervalsAthlete: '0', buddy: true, buddyName: 'Mochi', ankiOn: false, notionToken: '', notionAuto: true, dob: '', sex: 'male', maxHr: '', sleepBase: 7.5, heightCm: '', bodyFat: '', leanKg: '', weightKg: '', hcOn: false, chessSite: 'chess.com', chessUser: '', goodreadsUrl: ''
     },
     season: { name: 'Season 1', start: weekStart(t), weeks: 12 },
-    goals: [], days: {}, sessions: [], workouts: [], journal: {}, coach: [], reviews: {}, wellness: {}, exams: [], anki: null, hc: null, people: [], habitLog: {}, links: null,
+    goals: [], days: {}, sessions: [], workouts: [], journal: {}, coach: [], reviews: {}, wellness: {}, exams: [], anki: null, hc: null, people: [], habitLog: {}, links: null, habitSkip: {}, qbank: [], gts: [], mistakes: [], labs: [], protein: {}, reserve: {},
     activeSession: null, dismissedCarry: '', syncQueue: [], sync: {}, tomb: {}
   };
 }
@@ -312,7 +312,7 @@ function sleepFocusInsight(date = todayStr()) {
 
 function activeDay(date) {
   const d = D.days[date];
-  return (d && (d.targets.some(t => t.done) || d.checkin)) || focusMinOn(date) >= 10 || workoutsOn(date).length > 0 || !!(D.journal[date] && D.journal[date].saved) || ((D.anki && D.anki.days && D.anki.days[date]) || 0) >= 20;
+  return (d && (d.targets.some(t => t.done) || d.checkin)) || !!(D.reserve && D.reserve[date]) || focusMinOn(date) >= 10 || workoutsOn(date).length > 0 || !!(D.journal[date] && D.journal[date].saved) || ((D.anki && D.anki.days && D.anki.days[date]) || 0) >= 20;
 }
 function streak() {
   let s = 0; let d = todayStr();
@@ -511,7 +511,7 @@ function viewToday() {
       <div>
         <div class="date">${greet}${name} · ${dayName(t)}</div>
         <h1 class="words">${words(headline(done, total))}</h1>
-        ${ci && ci.win ? `<p class="hero-win">Today is a win if ${esc(ci.win)}</p>` : `<p class="hero-thought">${esc(thoughtFor(h < 12 ? 'morning' : h < 18 ? 'day' : 'evening', daySeed(t)))}</p>`}
+        ${ci && (ci.win || ci.stretch) ? winLine(ci) : `<p class="hero-thought">${esc(thoughtFor(h < 12 ? 'morning' : h < 18 ? 'day' : 'evening', daySeed(t)))}</p>`}
         ${ci || rd || (typeof nextExam === 'function' && nextExam()) ? `<div class="ci-chips">${rd ? `<span data-go="fitness" style="cursor:pointer"><i class="rd-dot" style="background:${rd.band.color}"></i>Recovery ${rd.score}% · ${rd.band.label}</span>` : ''}${typeof nextExam === 'function' && nextExam() ? `<span data-go="exams" style="cursor:pointer">${icon('exams')} ${esc(nextExam().name)} in ${Math.max(0, daysBetween(t, nextExam().date))}d</span>` : ''}${ci && ci.energy ? `<span>${icon('bolt')} Energy ${ci.energy}/5</span>` : ''}${ci && ci.mood ? `<span>${icon('heart')} ${MOODS[ci.mood - 1].label}</span>` : ''}</div>` : ''}
       </div>
       <div class="hero-stats">
@@ -527,7 +527,9 @@ function viewToday() {
     ${!ci && h < 15 ? `<button class="btn primary" data-go="checkin">${icon('sun')}Morning check-in</button><button class="btn" data-go="focus">${icon('play')}Start focus</button>` : `<button class="btn primary" data-go="focus">${icon('play')}Start focus</button>`}
     <button class="btn ghost" data-act="log-workout">${icon('run')}Log workout</button>
     <button class="btn ghost" data-go="journal">${icon('journal')}Reflect</button>
+    ${D.reserve && D.reserve[t] ? '' : reservesUsed(t) < RESERVE_PER_WEEK ? `<button class="btn ghost" data-act="reserve-day" title="Protects streaks and targets for today. 2 a week.">${icon('bed')}Reserve day</button>` : ''}
   </div>
+  ${D.reserve && D.reserve[t] ? `<div class="carry reserve-banner"><p><b>Reserve day.</b> Habits, streaks and tomorrow's QBank target are protected. ${RESERVE_PER_WEEK - reservesUsed(t)} left this week.</p><button class="btn sm ghost" data-act="reserve-day">Undo</button></div>` : resting(t) ? `<div class="carry reserve-banner"><p><b>Rest mode until ${shortDay(D.settings.restUntil)}.</b> Habits and reminders are paused.</p><button class="btn sm ghost" data-go="settings">Change</button></div>` : ''}
 
   <div class="grid g-main">
     <section class="panel">
@@ -550,14 +552,19 @@ function viewToday() {
 
     <div class="grid" style="align-content:start">
       ${focusTodayCard()}
+      ${qbankTodayCard()}
       ${typeof insightTodayCard === 'function' ? insightTodayCard() : ''}
       ${pr ? `<section class="panel prio">
         <div class="panel-head"><h3>${icon('compass', 'style="width:16px;height:16px;color:var(--violet);vertical-align:-2px"')} This week's priorities</h3><span class="muted" style="font-size:12px">${pr.priorities.filter(p => p.done).length}/${pr.priorities.length}</span></div>
         ${pr.priorities.map(p => `<div class="target ${p.done ? 'done' : ''}" data-pid="${p.id}"><button class="check" data-act="toggle-prio" aria-label="Mark done">${icon('check', 'stroke-width="3"')}</button><span class="t-title">${esc(p.title)}</span></div>`).join('')}
+        ${pr.obstacle ? `<p class="muted ifthen-plan">If ${esc(pr.obstacle)}, then ${esc(pr.ifthen || '…')}</p>` : ''}
       </section>` : ''}
       ${typeof habitsTodayCard === 'function' ? habitsTodayCard() : ''}
       ${typeof peopleTodayCard === 'function' ? peopleTodayCard() : ''}
       ${typeof examTodayCard === 'function' ? examTodayCard() : ''}
+      ${sleepKitCard()}
+      ${typeof proteinTodayCard === 'function' ? proteinTodayCard() : ''}
+      ${typeof labsTodayCard === 'function' ? labsTodayCard() : ''}
       ${typeof healthTodayCard === 'function' ? healthTodayCard() : ''}
       ${typeof ankiTodayCard === 'function' ? ankiTodayCard() : ''}
       <section class="panel">
@@ -657,7 +664,7 @@ function openCheckin() {
   const rows = dd.targets.filter(x => !x.done).slice(0, 3);
   while (rows.length < 3) rows.push(null);
   const rv = latestReview(8);
-  UI.ci = { sleepQ: ci.sleepQ || 0, energy: ci.energy || 0, mood: ci.mood || 0, tags: Array.isArray(ci.tags) ? ci.tags.slice() : [] };
+  UI.ci = { sleepQ: ci.sleepQ || 0, energy: ci.energy || 0, mood: ci.mood || 0, tags: Array.isArray(ci.tags) ? ci.tags.slice() : [], pain: ci.pain ?? null };
   const segRow = (key, labels) => `<div class="seg wide" data-seg="${key}">${labels.map((l, i) => `<button type="button" data-v="${i + 1}" class="${UI.ci[key] === i + 1 ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const m = modal(`
     <div class="ci-head"><div class="sunrise"><span class="sun"></span><span class="hill h1"></span><span class="hill h2"></span></div>
@@ -670,7 +677,9 @@ function openCheckin() {
       <div class="field"><label>${icon('bolt', 'class="lab-ic"')} Energy</label>${segRow('energy', ENERGY)}</div>
       <div class="field"><label>${icon('heart', 'class="lab-ic"')} Mood</label>${segRow('mood', MOODS.map(x => x.label))}</div>
       ${typeof behaviorChips === 'function' ? behaviorChips(UI.ci.tags) : ''}
-      <div class="field"><label>Today will be a win if…</label><input class="input" name="win" value="${esc(ci.win || '')}" placeholder="I finish the workplan timeline and get my run in" maxlength="140"></div>
+      <div class="row"><div class="field grow"><label>Today is a win if… (minimum)</label><input class="input" name="win" value="${esc(ci.win || '')}" placeholder="40 QBank questions, even on a bad day" maxlength="140"></div>
+        <div class="field grow"><label>Stretch</label><input class="input" name="stretch" value="${esc(ci.stretch || '')}" placeholder="80 questions and clear the Anki backlog" maxlength="140"></div></div>
+      ${(() => { const T = todayStr(), lift = [T, addDays(T, -1)].some(d => workoutsOn(d).some(w => w.type === 'strength')); return lift || ci.pain != null ? `<div class="field"><label>Back pain or soreness after lifting (0 to 10)</label><div class="seg wide pain-seg" data-pain>${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(v => `<button type="button" data-p="${v}" class="${ci.pain === v ? 'on' : ''}">${v}</button>`).join('')}</div></div>` : ''; })()}
       ${rv && rv.priorities && rv.priorities.length ? `<div class="prio-chips"><span class="muted">This week:</span>${rv.priorities.map(p => `<span class="chip ${p.done ? 'status-on' : ''}">${esc(p.title)}</span>`).join('')}</div>` : ''}
       <div class="field"><label>Top 3 for today</label>
         <div class="ci-targets">${rows.map((r, i) => `<div class="ci-row" data-row="${i}" data-id="${r ? r.id : ''}">
@@ -680,11 +689,14 @@ function openCheckin() {
           <input class="input" name="time${i}" type="time" value="${r && r.time ? r.time : ''}" style="width:112px" title="Optional: adds a block to your calendar">
           <select class="input" name="dur${i}" style="width:82px">${[25, 50, 90, 120].map(d => `<option value="${d}" ${(r && r.dur ? r.dur : 50) === d ? 'selected' : ''}>${d}m</option>`).join('')}</select>
         </div>`).join('')}</div>
+        <div class="row ifthen"><span class="muted">Make #1 an if-then. When</span><input class="input grow" name="cue" value="${esc(rows[0] && rows[0].cue || '')}" placeholder="I sit down after lunch / it is 14:00" maxlength="80"><span class="muted">, I will do #1.</span></div>
         <span class="hint">${gEnabled() ? 'These go to your Google Tasks list "Ascend". Ones with a time also go into Google Calendar.' : 'Connect Google in Settings to send these to Google Tasks and Calendar.'}</span>
       </div>
       <div class="modal-actions"><button type="button" class="btn ghost" data-act="close-modal">Later</button><button class="btn primary big" type="submit">${icon('check')}Start my day</button></div>
     </form>`, 'wide');
   m.addEventListener('click', (e) => {
+    const p = e.target.closest('[data-pain] [data-p]');
+    if (p) { UI.ci.pain = Number(p.dataset.p); $$('[data-p]', m).forEach(x => x.classList.toggle('on', x === p)); return; }
     const b = e.target.closest('[data-seg] [data-v]'); if (!b) return;
     const key = b.parentElement.dataset.seg; UI.ci[key] = Number(b.dataset.v);
     $$('button', b.parentElement).forEach(x => x.classList.toggle('on', x === b));
@@ -698,10 +710,11 @@ function openCheckin() {
       const id = $(`[data-row="${i}"]`, m).dataset.id;
       const existing = id ? dd.targets.find(x => x.id === id) : null;
       const vals = { title, goalId: fd.get('goal' + i) || '', time: fd.get('time' + i) || '', dur: Number(fd.get('dur' + i)) || 50 };
+      if (i === 0) vals.cue = String(fd.get('cue') || '').trim();
       if (existing) { if (title) { Object.assign(existing, vals); markDirty(existing); } }
       else if (title) { const it = { id: uid(), done: false, ...vals }; dd.targets.push(it); markDirty(it); added++; }
     }
-    dd.checkin = { tags: UI.ci.tags || [], sleepH: fd.get('sleepH') ? Number(fd.get('sleepH')) : null, sleepQ: UI.ci.sleepQ || null, energy: UI.ci.energy || null, mood: UI.ci.mood || null, win: String(fd.get('win') || '').trim(), at: new Date().toISOString() };
+    dd.checkin = { tags: UI.ci.tags || [], sleepH: fd.get('sleepH') ? Number(fd.get('sleepH')) : null, sleepQ: UI.ci.sleepQ || null, energy: UI.ci.energy || null, mood: UI.ci.mood || null, win: String(fd.get('win') || '').trim(), stretch: String(fd.get('stretch') || '').trim(), pain: UI.ci.pain, floorDone: !!ci.floorDone, stretchDone: !!ci.stretchDone, at: new Date().toISOString() };
     save(); closeModal(); go('today'); chime('done');
     setTimeout(() => { confetti(120); toast('Checked in. Go climb.'); checkStreakMilestone(); }, 500);
   });
@@ -1244,6 +1257,8 @@ function viewReview(tabs = '') {
         <div class="field"><label>What did not go well, and why?</label><textarea class="input" name="struggle" placeholder="Look at the numbers above. What pattern do you see?">${esc(rv.struggle || '')}</textarea></div>
         <div class="row"><div class="field grow"><label>Lesson to carry forward</label><input class="input" name="lesson" value="${esc(rv.lesson || '')}"></div>
         <div class="field grow"><label>One thing to stop doing</label><input class="input" name="stop" value="${esc(rv.stop || '')}"></div></div>
+        <div class="row"><div class="field grow"><label>Biggest obstacle next week</label><input class="input" name="obstacle" value="${esc(rv.obstacle || '')}" maxlength="120" placeholder="ward duty runs late on Thursday"></div>
+        <div class="field grow"><label>If it happens, I will…</label><input class="input" name="ifthen" value="${esc(rv.ifthen || '')}" maxlength="120" placeholder="do 30 questions before bed instead of 60"></div></div>
         <div class="field"><label>Next week's top 3 priorities</label>
           ${[0, 1, 2].map(i => `<div class="ci-row"><span class="ci-num">${i + 1}</span><input class="input grow" name="p${i}" value="${esc(pr[i] ? pr[i].title : '')}" placeholder="${['The one that matters most', 'Second priority', 'Health, learning or relationships'][i]}" maxlength="120"></div>`).join('')}
           <span class="hint">${gEnabled() && D.settings.googleTasks ? 'These go to Google Tasks, due in 7 days, and show on your Today screen all week.' : 'These show on your Today screen all week.'}</span></div>
@@ -1291,6 +1306,7 @@ function reviewMarkdown(key) {
   if (rv.struggle) L.push('### What did not go well', rv.struggle, '');
   if (rv.lesson) L.push('### Lesson', rv.lesson, '');
   if (rv.stop) L.push('### Stop doing', rv.stop, '');
+  if (rv.obstacle) L.push('### If-then for next week', `If ${rv.obstacle}, then ${rv.ifthen || ''}`, '');
   if (rv.priorities && rv.priorities.length) { L.push("### Next week's priorities"); rv.priorities.forEach(p => L.push(`- [ ] ${p.title}`)); }
   return L.join('\n');
 }
@@ -1436,9 +1452,13 @@ function viewSettings() {
       <div class="field grow"><label>Evening journal</label><input class="input" type="time" name="journalTime" value="${s.journalTime}"></div></div>
       <div class="row"><div class="field grow"><label>Weekly review day</label><select class="input" name="weeklyDay">${WEEKDAYS.map((d, i) => `<option value="${i}" ${Number(s.weeklyDay) === i ? 'selected' : ''}>${d}</option>`).join('')}</select></div>
       <div class="field grow"><label>Weekly review time</label><input class="input" type="time" name="weeklyTime" value="${s.weeklyTime}"></div></div>
-      <div class="row"><div class="field grow"><label>Motivation nudge every</label><select class="input" name="nudgeEveryHours">${hrs.map(h => `<option value="${h}" ${Number(s.nudgeEveryHours) === h ? 'selected' : ''}>${h} hour${h > 1 ? 's' : ''}</option>`).join('')}</select></div>
+      <div class="row"><div class="field grow"><label>Nudges</label><select class="input" name="nudgeMode">${[['plan', 'At your planned times (up to 3 a day)'], ['off', 'Off'], ...hrs.map(h => ['h' + h, `Generic, every ${h} hour${h > 1 ? 's' : ''}`])].map(([v, l]) => `<option value="${v}" ${(s.nudgeMode === 'hours' ? 'h' + Number(s.nudgeEveryHours) : s.nudgeMode || 'plan') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="field grow"><label>Between</label><div class="row"><input class="input" type="time" name="activeStart" value="${s.activeStart}"><input class="input" type="time" name="activeEnd" value="${s.activeEnd}"></div></div></div>
-      <div class="row"><div class="field grow"><label>Lights out</label><input class="input" type="time" name="bedTime" value="${esc(s.bedTime || '00:30')}"></div>
+      <div class="row"><div class="field grow"><label>Wake anchor (every day)</label><input class="input" type="time" name="wakeTime" value="${esc(s.wakeTime || '08:00')}"></div>
+      <div class="field grow"><label>Lights-out goal</label><input class="input" type="time" name="bedGoal" value="${esc(s.bedGoal || '00:00')}"></div></div>
+      <div class="row"><div class="field grow"><label>Rest mode until</label><input class="input" type="date" name="restUntil" value="${esc(s.restUntil || '')}"><span class="hint">Pauses habits and reminders, for illness or a planned break. Leave empty for off.</span></div>
+      <div class="field grow"><label>Protein target (g a day)</label><input class="input" type="number" name="proteinTarget" min="0" max="400" value="${esc(s.proteinTarget ?? 80)}"></div></div>
+      <div class="row"><div class="field grow"><label>Lights out (now)</label><input class="input" type="time" name="bedTime" value="${esc(s.bedTime || '00:30')}"></div>
       <div class="field grow"><label>Bedtime reminder</label><select class="input" name="bedLead">${[[0, 'Off'], [15, '15 min before'], [30, '30 min before'], [45, '45 min before'], [60, '1 hour before']].map(([v, l]) => `<option value="${v}" ${Number(s.bedLead ?? 30) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
       <label class="row toggle-row"><input type="checkbox" name="sound" ${s.sound ? 'checked' : ''}> Play a sound with reminders and timers</label>
       <label class="row toggle-row desk-only"><input type="checkbox" name="launchAtLogin" ${s.launchAtLogin ? 'checked' : ''}> Start Ascend quietly when Windows starts</label>
@@ -1875,8 +1895,9 @@ document.addEventListener('submit', (e) => {
       // and saving the stale, older values would quietly undo it on every device.
       const shown = UI.settingsForm || {}, now = formSnapshot(f);
       const changed = (k) => k in now && (!(k in shown) || shown[k] !== now[k]);
-      for (const k of ['name', 'buddyName', 'notionToken', 'dob', 'sex', 'maxHr', 'sleepBase', 'heightCm', 'bodyFat', 'leanKg', 'weightKg', 'activeStart', 'activeEnd', 'morningTime', 'journalTime', 'weeklyTime', 'bedTime', 'calendarUrl', 'notionUrl', 'intervalsKey', 'intervalsAthlete', 'chessSite', 'chessUser', 'goodreadsUrl']) if (changed(k)) s[k] = String(fd.get(k) || '').trim();
-      if (changed('nudgeEveryHours')) s.nudgeEveryHours = Number(fd.get('nudgeEveryHours')) || 2;
+      for (const k of ['name', 'buddyName', 'notionToken', 'dob', 'sex', 'maxHr', 'sleepBase', 'heightCm', 'bodyFat', 'leanKg', 'weightKg', 'activeStart', 'activeEnd', 'morningTime', 'journalTime', 'weeklyTime', 'bedTime', 'wakeTime', 'bedGoal', 'restUntil', 'calendarUrl', 'notionUrl', 'intervalsKey', 'intervalsAthlete', 'chessSite', 'chessUser', 'goodreadsUrl']) if (changed(k)) s[k] = String(fd.get(k) || '').trim();
+      if (changed('nudgeMode')) { const v = String(fd.get('nudgeMode')); if (v.startsWith('h')) { s.nudgeMode = 'hours'; s.nudgeEveryHours = Number(v.slice(1)) || 2; } else s.nudgeMode = v; }
+      if (changed('proteinTarget')) s.proteinTarget = Number(fd.get('proteinTarget')) || 0;
       if (changed('weeklyDay')) s.weeklyDay = Number(fd.get('weeklyDay')) || 0;
       if (changed('bedLead')) s.bedLead = Number(fd.get('bedLead')) || 0;
       for (const k of ['remindersOn', 'sound', 'launchAtLogin', 'buddy', 'notionAuto']) if (changed(k)) s[k] = fd.get(k) === 'on';
@@ -1921,7 +1942,7 @@ function saveReviewForm() {
   const f = $('[data-form=review]'); if (!f) return;
   const fd = new FormData(f); const key = reviewKey();
   const rv = D.reviews[key] = D.reviews[key] || { priorities: [] };
-  for (const k of ['win', 'struggle', 'lesson', 'stop']) rv[k] = String(fd.get(k) || '').trim();
+  for (const k of ['win', 'struggle', 'lesson', 'stop', 'obstacle', 'ifthen']) rv[k] = String(fd.get(k) || '').trim();
   if (UI.rate) rv.rating = UI.rate;
   if (typeof areaScores === 'function') rv.balance = areaValues(areaScores(addDays(key, -6), key));
   const titles = [0, 1, 2].map(i => String(fd.get('p' + i) || '').trim());
@@ -1993,7 +2014,7 @@ function goalModal(g = null) {
     if (ap) {
       area = ap.dataset.areaPick; $$('[data-area-pick]', m).forEach(b => b.classList.toggle('on', b === ap));
       const sel = $('[name=metric]', m), cur = sel.value; sel.innerHTML = metricOptions(area, cur);
-      if (isNew) sel.value = { health: 'sleep', mind: 'habit', hobbies: 'habit', people: 'habit', study: 'hours' }[area];
+      if (isNew) sel.value = { health: 'sleep', mind: 'habit', hobbies: 'habit', people: 'habit', study: 'questions' }[area];
       if (isNew) { color = areaOf({ area }).color; $$('[data-color]', m).forEach(b => b.classList.toggle('on', b.dataset.color === color)); }
       syncFields();
     }
@@ -2088,11 +2109,11 @@ const AFTER = {
 function migrate(d) {
   const base = defaults();
   const out = { ...base, ...d, settings: { ...base.settings, ...(d.settings || {}) }, season: { ...base.season, ...(d.season || {}) } };
-  for (const k of ['goals', 'sessions', 'workouts', 'coach', 'syncQueue', 'exams', 'people']) if (!Array.isArray(out[k])) out[k] = [];
+  for (const k of ['goals', 'sessions', 'workouts', 'coach', 'syncQueue', 'exams', 'people', 'qbank', 'gts', 'mistakes', 'labs']) if (!Array.isArray(out[k])) out[k] = [];
   if (out.links && typeof out.links !== 'object') out.links = null;
   if (out.anki && (typeof out.anki !== 'object' || !out.anki.days)) out.anki = null;
   if (out.hc && (typeof out.hc !== 'object' || !out.hc.days)) out.hc = null;
-  for (const k of ['days', 'journal', 'reviews', 'wellness', 'sync', 'tomb', 'habitLog']) if (!out[k] || typeof out[k] !== 'object' || Array.isArray(out[k])) out[k] = {};
+  for (const k of ['days', 'journal', 'reviews', 'wellness', 'sync', 'tomb', 'habitLog', 'habitSkip', 'protein', 'reserve']) if (!out[k] || typeof out[k] !== 'object' || Array.isArray(out[k])) out[k] = {};
   if (out.activeSession && Date.now() - out.activeSession.start > 12 * 3600e3) out.activeSession = null;
   out.version = 2;
   return out;

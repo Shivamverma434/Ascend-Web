@@ -133,10 +133,12 @@ function lifeGoalCard(g, i) {
   const edit = `<button class="btn sm ghost" data-act="edit-goal" data-goal="${g.id}">${icon('edit')}Edit</button>`;
   if (g.metric === 'habit') {
     const times = habitTimes(g), ws = weekStart(todayStr()), wk = habitInWeek(g, ws), st = habitStreak(g), done = habitDone(g.id, todayStr());
+    const str = habitStrength(g);
     return `<div class="goal" style="--i:${i}">${head(`<span class="chip ${wk >= times ? 'status-on' : ''}">${wk}/${times} this week</span>`)}
-      <div class="habit-week">${range(ws, addDays(ws, 6)).map(d => `<button type="button" class="hd ${habitDone(g.id, d) ? 'on' : ''} ${d === todayStr() ? 'today' : ''}" ${d <= todayStr() ? `data-act="habit-toggle" data-goal="${g.id}" data-d="${d}"` : 'disabled'} style="--c:${g.color}" title="${esc(shortDay(d))}">${'MTWTFSS'[(parseDay(d).getDay() + 6) % 7]}</button>`).join('')}</div>
+      <div class="h-strength"><span>Strength</span><i><b style="width:${str}%;background:${g.color}"></b></i><b>${str}%</b></div>
+      <div class="habit-week">${range(ws, addDays(ws, 6)).map(d => `<button type="button" class="hd ${habitDone(g.id, d) ? 'on' : ''} ${!habitDone(g.id, d) && habitSkipped(g.id, d) ? 'skip' : ''} ${d === todayStr() ? 'today' : ''}" ${d <= todayStr() ? `data-act="habit-toggle" data-goal="${g.id}" data-d="${d}"` : 'disabled'} style="--c:${g.color}" title="${esc(shortDay(d))}">${'MTWTFSS'[(parseDay(d).getDay() + 6) % 7]}</button>`).join('')}</div>
       <p class="muted" style="font-size:12.5px">${st.n ? `${icon('flame', 'style="width:13px;height:13px;color:var(--ember);vertical-align:-2px"')} ${st.n} ${st.unit} in a row. ` : ''}${times === 7 ? 'Every day.' : `${times} times a week.`} ${esc(a.label)}.${g.auto ? ` Ticks itself: ${esc(habitAutoLabel(g).toLowerCase())}.` : ''}</p>
-      <div class="g-actions"><button class="btn sm ${done ? '' : 'primary'}" data-act="habit-toggle" data-goal="${g.id}" data-d="${todayStr()}">${icon('check')}${done ? 'Done today' : 'Mark done today'}</button>${edit}</div></div>`;
+      <div class="g-actions"><button class="btn sm ${done ? '' : 'primary'}" data-act="habit-toggle" data-goal="${g.id}" data-d="${todayStr()}">${icon('check')}${done ? 'Done today' : 'Mark done today'}</button>${done ? '' : `<button class="btn sm ghost" data-act="habit-skip" data-goal="${g.id}" data-d="${todayStr()}">${habitSkipped(g.id, todayStr()) ? 'Undo skip' : 'Skip today'}</button>`}${edit}</div></div>`;
   }
   const s = levelStatus(g), unit = unitOf(g), d = levelDir(g);
   return `<div class="goal" style="--i:${i}">${head(`<span class="chip status-${s.key}">${s.label}</span>`)}
@@ -153,7 +155,7 @@ function habitsTodayCard() {
   return `<section class="panel habits-card">
     <div class="panel-head"><h3>${icon('habit', 'style="width:16px;height:16px;color:var(--ember);vertical-align:-2px"')} Habits</h3><span class="muted" style="font-size:12px">${hs.filter(g => habitDone(g.id, t)).length}/${hs.length} today</span></div>
     ${hs.map(g => { const done = habitDone(g.id, t), wk = habitInWeek(g, ws), times = habitTimes(g), st = habitStreak(g); return `<div class="target habit-row ${done ? 'done' : ''}"><button class="check" data-act="habit-toggle" data-goal="${g.id}" data-d="${t}" aria-label="Done today" style="--c:${g.color}">${icon('check', 'stroke-width="3"')}</button>
-      <span class="grow">${esc(g.name)}${g.auto ? ` <span class="auto-tag" title="${esc(habitAutoLabel(g))}">auto</span>` : ''}</span><span class="muted habit-meta">${wk}/${times}${st.n ? ` · ${icon('flame', 'style="width:12px;height:12px;color:var(--ember);vertical-align:-1px"')}${st.n}` : ''}</span></div>`; }).join('')}
+      <span class="grow">${esc(g.name)}${g.auto ? ` <span class="auto-tag" title="${esc(habitAutoLabel(g))}">auto</span>` : ''}${habitSkipped(g.id, t) && !done ? ' <span class="auto-tag skip">skipped</span>' : ''}</span>${done ? '' : `<button class="icon-btn" data-act="habit-skip" data-goal="${g.id}" data-d="${t}" title="${habitSkipped(g.id, t) ? 'Undo skip' : 'Skip today: does not break the streak'}">${icon('x')}</button>`}<span class="muted habit-meta" title="Habit strength">${habitStrength(g)}% · ${wk}/${times}${st.n ? ` · ${icon('flame', 'style="width:12px;height:12px;color:var(--ember);vertical-align:-1px"')}${st.n}` : ''}</span></div>`; }).join('')}
   </section>`;
 }
 

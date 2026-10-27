@@ -19,15 +19,25 @@ const sessionsOf = (tp) => tp.learned ? [tp.learned, ...(tp.revs || [])] : [];
 const confOn = (tp, d) => (tp.conf || {})[d] || 3;
 const lastConf = (tp) => { const s = sessionsOf(tp); return s.length ? confOn(tp, s[s.length - 1]) : 0; };
 
+// Gaps scale to the exam (Cepeda 2008: the best gap is a shrinking share of the time left). Near the exam no topic
+// waits more than a quarter of the days left; far from it, strong topics still come back for upkeep.
+const topicExamDate = () => memo('topicExam', () => { const m = {}; for (const ex of activeExams()) for (const s of ex.subjects) for (const tp of s.topics) if (!m[tp.id]) m[tp.id] = ex.date; return m; });
+function daysToExam(tp, t) { const d = topicExamDate()[tp.id]; return d && d >= t ? daysBetween(t, d) : null; }
 function topicState(tp, t = todayStr()) {
   if (!tp.learned) return { key: 'new', label: 'Not started' };
   const n = (tp.revs || []).length;
   const last = n ? tp.revs[n - 1] : tp.learned;
   const L = confOn(tp, last);
-  if (n >= REV_GAPS.length && L >= 4) return { key: 'strong', label: 'Strong' };
+  const left = daysToExam(tp, t);
+  if (n >= REV_GAPS.length && L >= 4) {
+    const keep = left != null && left > 45 ? Math.round(left * 0.12) : null;
+    if (!keep || addDays(last, keep) > t) return { key: 'strong', label: 'Strong' };
+    return { key: 'due', label: 'Upkeep revision due', due: addDays(last, keep), over: daysBetween(addDays(last, keep), t) };
+  }
   // Shaky topics come back sooner, confident ones later
   const base = n >= REV_GAPS.length ? 7 : REV_GAPS[n];
-  const gap = L <= 1 ? 1 : L === 2 ? Math.max(1, Math.round(base / 2)) : L >= 5 ? Math.round(base * 1.5) : base;
+  let gap = L <= 1 ? 1 : L === 2 ? Math.max(1, Math.round(base / 2)) : L >= 5 ? Math.round(base * 1.5) : base;
+  if (left != null) gap = Math.max(1, Math.min(gap, Math.round(left / 4)));
   const due = addDays(last, gap);
   if (due <= t) return { key: 'due', label: daysBetween(due, t) ? `Revision ${n + 1}, ${daysBetween(due, t)}d overdue` : `Revision ${n + 1} due today`, due, over: daysBetween(due, t) };
   return { key: 'learned', label: `Next revision ${shortDay(due)}`, due };
@@ -96,12 +106,12 @@ function viewExams() {
   UI.examId = ex.id;
   const st = examStats(ex);
   const plan = examPlan(ex);
-  const row = (x, kind) => { const s = topicState(x.tp); return `<div class="target ex-row" data-ex="${ex.id}" data-sub="${x.s.id}" data-top="${x.tp.id}" data-kind="${kind}"><button class="check" data-act="exam-tick" aria-label="Mark done">${icon('check', 'stroke-width="3"')}</button><span class="t-title">${esc(x.tp.name)}</span><span class="t-meta"><span class="chip"><span class="dot" style="background:${x.s.color}"></span>${esc(x.s.name)}</span><span class="muted ex-when">${kind === 'rev' ? esc(s.label) : 'New'}</span></span></div>`; };
+  const row = (x, kind) => { const s = topicState(x.tp); return `<div class="target ex-row" data-ex="${ex.id}" data-sub="${x.s.id}" data-top="${x.tp.id}" data-kind="${kind}"><button class="check" data-act="exam-tick" aria-label="Mark done">${icon('check', 'stroke-width="3"')}</button><span class="t-title">${esc(x.tp.name)}</span><span class="t-meta"><span class="chip"><span class="dot" style="background:${x.s.color}"></span>${esc(x.s.name)}</span>${kind === 'learn' && !hasQb(x.tp.id) ? `<button class="chip qb-first" data-act="qb-topic" data-ex="${ex.id}" data-subj="${x.s.id}" data-top="${x.tp.id}" title="Do questions on it first, then notes">QBank first</button>` : `<span class="muted ex-when">${kind === 'rev' ? esc(s.label) : 'New'}</span>`}</span></div>`; };
   const done = plan.doneToday;
   return `
   <div class="view-head"><div><h1>Exams</h1><p class="sub">${esc(thoughtFor('day', daySeed()))}</p></div>
     <div class="row">${exams.length > 1 ? `<select class="input" data-act="exam-pick" style="width:auto">${exams.map(e => `<option value="${e.id}" ${e.id === ex.id ? 'selected' : ''}>${esc(e.name)}</option>`).join('')}</select>` : ''}
-      <div class="seg big-seg"><button data-extab="plan" class="${UI.exTab !== 'table' ? 'on' : ''}">Plan</button><button data-extab="table" class="${UI.exTab === 'table' ? 'on' : ''}">Timetable</button></div>
+      <div class="seg big-seg">${[['plan', 'Plan'], ['qbank', 'QBank'], ['tests', 'Tests'], ['table', 'Timetable']].map(([k, l]) => `<button data-extab="${k}" class="${(UI.exTab || 'plan') === k ? 'on' : ''}">${l}${k === 'tests' && mkDue().length ? ` · ${mkDue().length}` : ''}</button>`).join('')}</div>
       <button class="btn ghost" data-act="exam-new">${icon('plus')}Exam</button></div></div>
   <section class="exam-hero">
     <div class="ex-count"><b data-count="${st.daysLeft}">${st.daysLeft}</b><span>day${st.daysLeft === 1 ? '' : 's'} to go</span></div>
@@ -110,7 +120,7 @@ function viewExams() {
       <p class="ex-pace">${st.total ? (st.learned < st.total ? `Learn about <b>${plan.perDay}</b> new topic${plan.perDay === 1 ? '' : 's'} a day to finish ${st.daysLeft > 10 ? 'a week early, leaving time to revise' : 'in time'}.` : 'Every topic learned. Now it is all revision.') : 'Add subjects and topics to get a plan.'}</p></div>
     <button class="icon-btn" data-act="exam-edit" title="Edit exam">${icon('edit')}</button>
   </section>
-  ${UI.exTab === 'table' ? timetableHTML(ex) : `
+  ${UI.exTab === 'table' ? timetableHTML(ex) : UI.exTab === 'qbank' ? qbankTab(ex) : UI.exTab === 'tests' ? testsTab(ex) : `
   <div class="grid g-main" style="margin-top:20px">
     <section class="panel">
       <div class="panel-head"><div><h2>Today's plan</h2><p class="muted">${plan.due.length} revision${plan.due.length === 1 ? '' : 's'} due · ${plan.learn.length} new · ${done.length} done today</p></div>
@@ -125,7 +135,7 @@ function viewExams() {
       <div class="ex-subjects">${ex.subjects.map(s => { const ts = s.topics.map(tp => topicState(tp).key); const n = ts.length || 1; return `<div class="ex-sub" data-sub="${s.id}">
         <div class="row" style="justify-content:space-between"><b><span class="dot" style="background:${s.color}"></span>${esc(s.name)}</b><span class="row" style="gap:2px"><span class="muted" style="font-size:12px">${ts.filter(k => k !== 'new').length}/${ts.length}${ts.filter(k => k === 'due').length ? ` · <span style="color:var(--ember)">${ts.filter(k => k === 'due').length} due</span>` : ''}</span><button class="icon-btn" data-act="subject-edit" title="Edit subject">${icon('edit')}</button></span></div>
         <div class="ex-stack"><i style="width:${100 * ts.filter(k => k === 'strong').length / n}%;background:var(--gold)"></i><i style="width:${100 * ts.filter(k => k === 'learned').length / n}%;background:${s.color}"></i><i style="width:${100 * ts.filter(k => k === 'due').length / n}%;background:var(--ember)"></i></div>
-        <div class="ex-topics">${s.topics.map(tp => { const k = topicState(tp); return `<button class="ex-topic ${k.key}" data-act="topic-open" data-top="${tp.id}" data-tip="${esc(tp.name + ' · ' + k.label)}">${esc(tp.name)}</button>`; }).join('')}</div>
+        <div class="ex-topics">${s.topics.map(tp => { const k = topicState(tp), q = qbTopic(tp.id); return `<button class="ex-topic ${k.key} ${q.n ? 'has-qb' : ''}" data-act="topic-open" data-top="${tp.id}" data-tip="${esc(tp.name + ' · ' + k.label + (q.n ? ` · QBank ${pctOf(q)}% of ${q.n}` : ' · no QBank yet'))}">${esc(tp.name)}</button>`; }).join('')}</div>
       </div>`; }).join('') || '<p class="muted">No subjects yet.</p>'}</div>
       <div class="chart-legend" style="font-size:12px"><span><i class="lg new"></i>Not started</span><span><i class="lg learned"></i>Learned</span><span><i class="lg due"></i>Revision due</span><span><i class="lg strong"></i>Strong</span></div>
     </section>
@@ -279,6 +289,7 @@ function topicModal(ex, s, tp) {
   const k = topicState(tp);
   const m = modal(`<h2>${esc(tp.name)}</h2><p class="sub"><span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.color}"></span> ${esc(s.name)} · ${esc(k.label)}</p>
     ${tp.learned ? `<p class="muted" style="font-size:13px;margin-bottom:14px">Learned ${shortDay(tp.learned)}${(tp.revs || []).length ? ` · revised ${tp.revs.map(d => shortDay(d)).join(', ')}` : ''}</p>` : ''}
+    <div class="qb-line">${(() => { const q = qbTopic(tp.id); return q.n ? `QBank: <b>${pctOf(q)}%</b> of ${q.n} questions` : 'No QBank on this topic yet. Questions first, then notes.'; })()}<button class="btn sm" data-act="qb-topic" data-ex="${ex.id}" data-subj="${s.id}" data-top="${tp.id}">${icon('plus')}Log questions</button></div>
     <label class="muted" style="font-size:13px;font-weight:600">${touchedOn(tp, todayStr()) ? 'Studied today. Change how well you know it:' : tp.learned ? 'Revised it today? How well do you know it now?' : 'Learned it today? How well do you know it?'}</label>
     <div class="conf-pick" style="margin:8px 0 14px">${CONF.map(c => `<button type="button" data-local="conf" data-conf="${c.v}" class="${touchedOn(tp, todayStr()) && confOn(tp, todayStr()) === c.v ? 'on' : ''}" style="--cc:${c.c};--ci:${c.ink}"><b>${c.v}</b>${c.label}</button>`).join('')}</div>
     <div class="row wrap">${tp.learned ? '<button class="btn ghost" data-local="reset">Start over</button>' : ''}${touchedOn(tp, todayStr()) ? '<button class="btn ghost" data-local="undo">Undo today</button>' : ''}<button class="btn ghost" data-local="del" style="color:var(--off)">Delete topic</button></div>
