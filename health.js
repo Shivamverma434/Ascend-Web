@@ -336,7 +336,7 @@ function whoopRow(t = todayStr()) {
     <div class="dials">${dial(sp, 100, '#7C8CF8', 'Sleep', sp == null ? 'no data' : `${sleepHours(t)}h of ${sleepNeed(addDays(t, -1))}h needed`)}${dial(rd ? rd.score : null, 100, rd ? recColor(rd.score) : 'var(--mist)', 'Recovery', rd ? rd.band.label : 'no data')}${dial(st, 21, '#3D8BFD', 'Strain', `target ${lo} to ${hi}`)}</div>
     <div class="coach-lines">
       <div>${icon('bolt')}<p><b>Strain coach:</b> ${st == null ? `Aim for ${lo} to ${hi} today.` : st < lo ? `You are at ${st}. ${rd && rd.score >= 67 ? 'You are recovered: push to' : 'A moderate session takes you to'} ${lo} to ${hi}.` : st > hi ? `You are at ${st}, above today's target. Ease off and recover.` : `${st} is right in today's ${lo} to ${hi} zone. Nice.`}</p></div>
-      <div>${icon('moon')}<p><b>Sleep coach:</b> you need about <b>${need} h</b> tonight. In bed by <b>${hm(bed)}</b> to wake at ${hm(wakeTime())}.</p></div>
+      <div>${icon('moon')}<p><b>Sleep coach:</b> ${typeof sleepPlanLine === "function" ? sleepPlanLine() : `you need about <b>${need} h</b> tonight. In bed by <b>${hm(bed)}</b> to wake at ${hm(wakeTime())}.`}</p></div>
     </div>
   </section>`;
 }
@@ -405,7 +405,7 @@ function healthPanels() {
     <div class="row"><div class="field grow"><label>Date of birth</label><input class="input" type="date" name="dob" value="${esc(s.dob || '')}" max="${todayStr()}"></div>
     <div class="field grow"><label>Sex (for fitness norms)</label><select class="input" name="sex"><option value="male" ${s.sex !== 'female' ? 'selected' : ''}>Male</option><option value="female" ${s.sex === 'female' ? 'selected' : ''}>Female</option></select></div></div>
     <div class="row"><div class="field grow"><label>Max heart rate (optional)</label><input class="input" type="number" name="maxHr" min="120" max="230" value="${esc(s.maxHr || '')}" placeholder="${hrMax()}"></div>
-    <div class="field grow"><label>Your sleep need (hours)</label><input class="input" type="number" name="sleepBase" step="0.25" min="6" max="10" value="${esc(s.sleepBase || 7.5)}"></div></div>
+    <div class="field grow"><label>Sleep need to start from (hours)</label><input class="input" type="number" name="sleepBase" step="0.5" min="6" max="9.5" value="${esc(s.sleepBase || 7.5)}"></div></div>
     <div class="row"><div class="field grow"><label>Height (cm)</label><input class="input" type="number" name="heightCm" min="120" max="230" value="${esc(s.heightCm || '')}"></div>
     <div class="field grow"><label>Body fat % (filled from your scale)</label><input class="input" type="number" name="bodyFat" step="0.1" min="3" max="60" value="${esc(s.bodyFat || '')}"></div></div>
     <div class="row"><div class="field grow"><label>Lean mass kg (DXA, optional)</label><input class="input" type="number" name="leanKg" step="0.1" min="25" max="130" value="${esc(s.leanKg || '')}"></div>

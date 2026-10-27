@@ -181,20 +181,13 @@ function testsTab() {
   const byType = ERROR_TYPES.map((t, i) => ({ t, n: (D.mistakes || []).filter(x => x.type === i).length })).filter(x => x.n).sort((a, b) => b.n - a.n);
   const guess = gts.filter(t => t.guessed), gAcc = guess.length ? Math.round(100 * sum(guess, t => t.guessRight) / Math.max(1, sum(guess, t => t.guessed))) : null;
   return `
-  <div class="grid g-main" style="margin-top:20px">
+  <div class="grid" style="margin-top:20px">
     <div class="grid" style="align-content:start">
       <section class="panel"><div class="panel-head"><h3>Grand tests</h3><button class="btn sm primary" data-act="gt-log">${icon('plus')}Log test</button></div>
         ${gts.length ? `${gtChart(gts)}
         <div class="qb-table">${gts.slice().reverse().slice(0, 12).map(t => `<div class="qb-row"><b class="grow">${esc(t.name)} <span class="muted" style="font-size:12px;font-weight:500">${shortDay(t.date)} · ${GT_KINDS[t.kind] ? GT_KINDS[t.kind].label : ''}</span></b><span class="muted">${t.correct}✓ ${t.wrong}✗ ${t.skipped} skipped${t.rank ? ` · AIR ${t.rank.toLocaleString()}` : ''}</span><b class="qb-acc">${gtScore(t)}<small>/${gtMax(t)}</small></b><button class="icon-btn" data-act="gt-del" data-id="${t.id}" title="Remove">${icon('trash')}</button></div>`).join('')}</div>
         ${gAcc !== null ? `<p class="muted" style="font-size:12.5px;margin-top:10px">Your guesses are right ${gAcc}% of the time. A blind guess is worth +0.25 marks in NEET PG and nothing in INICET, so in INICET only guess after ruling out an option.</p>` : ''}`
           : '<p class="muted">Log each grand test: score, rank and how many you guessed. Rankers in 2025 wrote one every 10 to 15 days and reviewed it the same day.</p>'}</section>
-    </div>
-    <div class="grid" style="align-content:start">
-      <section class="panel"><div class="panel-head"><h3>Mistakes to re-test${due.length ? ` · ${due.length} due` : ''}</h3><button class="btn sm" data-act="mk-log">${icon('plus')}Mistake</button></div>
-        ${due.length ? due.slice(0, 12).map(x => `<div class="mk-row"><div class="grow"><b>${esc(x.note)}</b>${x.lesson ? `<p class="muted" style="font-size:12.5px">Lesson: ${esc(x.lesson)}</p>` : ''}<span class="muted" style="font-size:11.5px">${esc(ERROR_TYPES[x.type] || '')}${x.subName ? ' · ' + esc(x.subName) : ''} · right ${x.k || 0} of 3</span></div>
-          <div class="row" style="gap:6px"><button class="btn sm" data-act="mk-ok" data-id="${x.id}">${icon('check')}Got it</button><button class="btn sm ghost" data-act="mk-miss" data-id="${x.id}">Missed</button></div></div>`).join('')
-          : `<p class="muted">${open.length ? `Nothing due today. ${open.length} mistake${open.length === 1 ? '' : 's'} waiting for their next test.` : 'Log the questions you get wrong. Each one comes back until you get it right three times running.'}</p>`}</section>
-      ${byType.length ? `<section class="panel"><div class="panel-head"><h3>Why you lose marks</h3></div>${byType.map(x => `<div class="qb-row"><span class="grow">${x.t}</span><i class="qb-bar"><b style="width:${100 * x.n / byType[0].n}%;background:var(--violet)"></b></i><b class="qb-acc">${x.n}</b></div>`).join('')}</section>` : ''}
     </div>
   </div>`;
 }

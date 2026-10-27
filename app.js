@@ -244,6 +244,8 @@ function wellnessOn(date) {
   if (!h) return w || null;
   const m = { ...(w || {}) };
   for (const [k, hk] of [['steps', 'steps'], ['sleepSecs', 'sleepSecs'], ['restingHR', 'rhr'], ['hrv', 'hrv'], ['vo2max', 'vo2'], ['weight', 'weight']]) if (m[k] == null && h[hk] != null) m[k] = h[hk];
+  // Steps: intervals.icu can hold an early or partial count for today, so the higher of the two wins
+  if (h.steps != null && (m.steps == null || h.steps > m.steps)) m.steps = h.steps;
   for (const k of ['hrPeak', 'fat', 'lean', 'heightCm', 'bmr', 'activeKcal', 'totalKcal', 'km', 'floors', 'waterL', 'spo2', 'resp', 'sys', 'dia', 'glucose', 'tempC']) if (m[k] == null && h[k] != null) m[k] = h[k];
   return m;
 }
@@ -560,7 +562,7 @@ function viewToday() {
       ${typeof insightTodayCard === 'function' ? insightTodayCard() : ''}
       ${pr ? `<section class="panel prio">
         <div class="panel-head"><h3>${icon('compass', 'style="width:16px;height:16px;color:var(--violet);vertical-align:-2px"')} This week's priorities</h3><span class="muted" style="font-size:12px">${pr.priorities.filter(p => p.done).length}/${pr.priorities.length}</span></div>
-        ${pr.priorities.map(p => `<div class="target ${p.done ? 'done' : ''}" data-pid="${p.id}"><button class="check" data-act="toggle-prio" aria-label="Mark done">${icon('check', 'stroke-width="3"')}</button><span class="t-title">${esc(p.title)}</span></div>`).join('')}
+        ${pr.priorities.map(p => { const g = D.goals.find(x => x.id === p.goalId); return `<div class="target ${p.done ? 'done' : ''}" data-pid="${p.id}"><button class="check" data-act="toggle-prio" aria-label="Mark done">${icon('check', 'stroke-width="3"')}</button><span class="t-title">${esc(p.title)}</span>${g ? `<span class="t-meta"><span class="chip"><span class="dot" style="background:${g.color}"></span>${esc(g.name)}</span></span>` : ''}</div>`; }).join('')}
         ${pr.obstacle ? `<p class="muted ifthen-plan">If ${esc(pr.obstacle)}, then ${esc(pr.ifthen || '…')}</p>` : ''}
       </section>` : ''}
       ${typeof habitsTodayCard === 'function' ? habitsTodayCard() : ''}
@@ -735,7 +737,7 @@ function viewFocus() {
   const week = range(addDays(t, -6), t).map(d => ({ label: parseDay(d).toLocaleDateString(undefined, { weekday: 'short' }), value: round1(focusMinOn(d) / 60), tip: `${shortDay(d)}: ${fmtMin(focusMinOn(d))} focused` }));
 
   return `
-  <div class="view-head"><div><button class="btn ghost sm back-btn" data-go="today">‹ Today</button><h1>Focus</h1><p class="sub">${ASCEND_IS_MOBILE ? 'One task. One timer. Lock your phone and get to work: Ascend tells you when time is up.' : 'One task. One timer. Ascend notices when you drift away from the keyboard and scores your focus.'}</p></div></div>
+  <div class="view-head"><div><button class="btn ghost sm back-btn" data-go="today">‹ Today</button><h1>Focus</h1><p class="sub">${ASCEND_IS_MOBILE ? 'One task. One timer. Lock your phone and get to work: Ascend tells you when time is up.' : 'One task. One timer. Study wherever you like: Ascend just counts the time.'}</p></div></div>
   <div class="focus-stage">
     <section class="timer-wrap ${a && !a.pausedAt ? 'running' : ''} ${a && a.pausedAt ? 'paused' : ''}" id="timerWrap">
       <div class="aurora"><i></i><i></i><i></i></div>
@@ -753,7 +755,7 @@ function viewFocus() {
           ${a.pausedAt ? `<button class="btn primary big" data-act="resume">${icon('play')}Resume</button>` : `<button class="btn big" data-act="pause" style="background:rgba(255,255,255,.1);border-color:transparent;color:#fff">${icon('pause')}Pause</button>`}
           <button class="btn big" data-act="finish" style="background:#fff;color:var(--ink)">${icon('stop')}Finish</button>
         </div>
-        <div class="quality">Focus quality <b id="liveQ">100%</b> · <span id="liveIdle">0 drifts</span></div>
+
         <button class="btn sm ghost" data-act="discard" style="color:rgba(255,255,255,.6);margin-top:8px">Discard session</button>`
       : `
         <form data-form="start-focus" style="width:100%;max-width:420px;display:flex;flex-direction:column;gap:10px;position:relative;z-index:2">
@@ -768,10 +770,10 @@ function viewFocus() {
       <section class="panel">
         <div class="row" style="justify-content:space-between;align-items:flex-start">
           <div><span class="muted">Focused today</span><div class="kpi" data-count="${fmin}" data-fmt="min">${fmtMin(fmin)}</div></div>
-          <div style="text-align:right"><span class="muted">Focus quality</span><div class="kpi" style="color:var(--on)">${list.length ? `<span data-count="${avgQuality(list)}" data-fmt="pct">${avgQuality(list)}%</span>` : '–'}</div></div>
+          <div style="text-align:right"><span class="muted">Sessions</span><div class="kpi">${list.length}</div></div>
         </div>
         <p class="muted" style="margin-bottom:12px">${list.length} session${list.length === 1 ? '' : 's'} today</p>
-        <div class="session-list">${list.slice().reverse().map((s, i) => `<div class="session" style="--i:${i}"><div class="grow"><b>${esc(s.task || 'Focus session')}</b><div class="muted" style="font-size:12px">${fmtTime(s.start)} · ${fmtMin(s.minutes)}${s.goalId && D.goals.find(g => g.id === s.goalId) ? ' · ' + esc(D.goals.find(g => g.id === s.goalId).name) : ''}</div></div><span class="q" style="color:${s.quality >= 85 ? 'var(--on)' : s.quality >= 65 ? '#A86400' : 'var(--off)'}">${s.quality}%</span></div>`).join('') || '<p class="muted">Your sessions will appear here.</p>'}</div>
+        <div class="session-list">${list.slice().reverse().map((s, i) => `<div class="session" style="--i:${i}"><div class="grow"><b>${esc(s.task || 'Focus session')}</b><div class="muted" style="font-size:12px">${fmtTime(s.start)} · ${fmtMin(s.minutes)}${s.goalId && D.goals.find(g => g.id === s.goalId) ? ' · ' + esc(D.goals.find(g => g.id === s.goalId).name) : ''}</div></div></div>`).join('') || '<p class="muted">Your sessions will appear here.</p>'}</div>
       </section>
       <section class="panel">
         <div class="panel-head"><h3>Focus hours, last 7 days</h3></div>
@@ -788,11 +790,6 @@ function startTimerLoop() {
   timerTick = setInterval(async () => {
     const a = D.activeSession;
     if (!a) { clearInterval(timerTick); return; }
-    if (!a.pausedAt) {
-      const idle = await bridge.idleSeconds();
-      if (idle >= 60) { a.idleSec = (a.idleSec || 0) + 1; if (!a.inDrift) { a.inDrift = true; a.drifts = (a.drifts || 0) + 1; } }
-      else a.inDrift = false;
-    }
     const el = sessionElapsed(a);
     const remain = a.planned * 60 - el;
     const q = el > 0 ? Math.round(100 * clamp(1 - (a.idleSec || 0) / el, 0, 1)) : 100;
@@ -830,8 +827,8 @@ function finishSession(auto = false) {
     const after = before + minutes;
     const crossed = [60, 120, 180, 240, 300].find(m => before < m && after >= m);
     const milestone = crossed ? ` That takes you past ${crossed / 60} hour${crossed > 60 ? 's' : ''} of deep work today.` : '';
-    celebrate({ big: quality + '%', title: auto ? 'Session complete' : 'Nice work', text: `${fmtMin(minutes)} on ${a.task || 'deep work'}. ${quality >= 85 ? 'Locked in. Great session.' : quality >= 65 ? 'Solid. Fewer drifts next time.' : 'Tough one. Shorter sessions might help.'}${milestone}`, cta: 'Take a 5 minute break' });
-    if (document.hidden || auto) bridge.showPopup({ kind: 'done', theme: 'celebrate', icon: 'trophy', eyebrow: 'Focus session complete', title: `${fmtMin(minutes)} locked in`, body: `${a.task || 'Deep work'} · focus quality ${quality}%.${milestone} Stand up, stretch, drink some water.`, stat: quality + '%', statLabel: 'quality', sound: D.settings.sound, actions: [{ label: 'Start another', view: 'focus', primary: true }, { label: 'Done for now' }] });
+    celebrate({ big: fmtMin(minutes), title: auto ? 'Session complete' : 'Nice work', text: `${fmtMin(minutes)} on ${a.task || 'deep work'}. Done.${milestone}`, cta: 'Take a 5 minute break' });
+    if (document.hidden || auto) bridge.showPopup({ kind: 'done', theme: 'celebrate', icon: 'trophy', eyebrow: 'Focus session complete', title: `${fmtMin(minutes)} locked in`, body: `${a.task || 'Deep work'}.${milestone} Stand up, stretch, drink some water.`, stat: fmtMin(after), statLabel: 'today', sound: D.settings.sound, actions: [{ label: 'Start another', view: 'focus', primary: true }, { label: 'Done for now' }] });
     setTimeout(checkStreakMilestone, 2500);
   }
 }
@@ -880,6 +877,7 @@ function goalCard(g, i) {
     <div><span class="g-num" data-count="${s.p}" data-fmt="dec">${s.p}</span> <span class="muted">/ ${g.target} ${esc(unitOf(g))}</span></div>
     <div class="progress-bar"><i style="width:${pct}%;background:${g.color}"></i></div>
     <p class="muted" style="font-size:12.5px">${need > 0 ? `About ${round1(need / weeksLeft)} ${esc(unitOf(g))} a week to finish on time.` : 'Target hit. Raise the bar?'} ${esc(METRICS[g.metric].label)}${g.metric === 'calendar' && g.keyword ? ` ("${esc(g.keyword)}")` : ''}.</p>
+    ${(() => { const ps = ((latestReview(8) || {}).priorities || []).filter(p => p.goalId === g.id); return ps.length ? `<p class="g-prio">This week: ${ps.map(p => (p.done ? '✓ ' : '') + esc(p.title)).join(' · ')}</p>` : ''; })()}
     <div class="g-actions">
       <button class="btn sm" data-act="log-goal" data-goal="${g.id}">${icon('plus')}Log progress</button>
       <button class="btn sm ghost" data-act="edit-goal" data-goal="${g.id}">${icon('edit')}Edit</button>
@@ -1248,7 +1246,7 @@ function viewReview(tabs = '') {
       <div class="panel">
         <h4 class="chart-title">Goals this week</h4>
         ${goals.map(g => { const lvl = isLevel(g), delta = round1(goalProgress(g, key, from)); const s = goalStatus(g); return `<div class="g-week"><span class="dot" style="background:${g.color}"></span><b class="grow">${esc(g.name)}</b><span class="muted">${lvl ? (s.p ?? '–') : '+' + delta} ${esc(unitOf(g))}</span><span class="chip status-${s.key}">${s.label}</span></div>`; }).join('') || '<p class="muted">No goals yet.</p>'}
-        <div class="row" style="gap:16px;margin-top:10px;flex-wrap:wrap">${ws.mood !== null ? `<span class="muted">Avg mood <b style="color:var(--ink)">${ws.mood}/5</b></span>` : ''}${ws.sleep !== null ? `<span class="muted">Avg sleep <b style="color:var(--ink)">${ws.sleep}h</b></span>` : ''}${ws.quality ? `<span class="muted">Focus quality <b style="color:var(--ink)">${ws.quality}%</b></span>` : ''}</div>
+        <div class="row" style="gap:16px;margin-top:10px;flex-wrap:wrap">${ws.mood !== null ? `<span class="muted">Avg mood <b style="color:var(--ink)">${ws.mood}/5</b></span>` : ''}${ws.sleep !== null ? `<span class="muted">Avg sleep <b style="color:var(--ink)">${ws.sleep}h</b></span>` : ''}</div>
         ${prevPr.length ? `<div class="prev-prio"><span class="muted">Last week's priorities: ${prevPr.filter(p => p.done).length}/${prevPr.length} done</span>${prevPr.map(p => `<span class="chip ${p.done ? 'status-on' : 'status-off'}">${p.done ? '✓' : '✗'} ${esc(p.title)}</span>`).join('')}</div>` : ''}
       </div>
     </div>
@@ -1264,7 +1262,7 @@ function viewReview(tabs = '') {
         <div class="row"><div class="field grow"><label>Biggest obstacle next week</label><input class="input" name="obstacle" value="${esc(rv.obstacle || '')}" maxlength="120" placeholder="ward duty runs late on Thursday"></div>
         <div class="field grow"><label>If it happens, I will…</label><input class="input" name="ifthen" value="${esc(rv.ifthen || '')}" maxlength="120" placeholder="do 30 questions before bed instead of 60"></div></div>
         <div class="field"><label>Next week's top 3 priorities</label>
-          ${[0, 1, 2].map(i => `<div class="ci-row"><span class="ci-num">${i + 1}</span><input class="input grow" name="p${i}" value="${esc(pr[i] ? pr[i].title : '')}" placeholder="${['The one that matters most', 'Second priority', 'Health, learning or relationships'][i]}" maxlength="120"></div>`).join('')}
+          ${[0, 1, 2].map(i => `<div class="ci-row"><span class="ci-num">${i + 1}</span><input class="input grow" name="p${i}" value="${esc(pr[i] ? pr[i].title : '')}" placeholder="${['The one that matters most', 'Second priority', 'Health, learning or relationships'][i]}" maxlength="120"><select class="input" name="pg${i}" style="width:160px" title="The goal it moves">${goalOptions(pr[i] ? pr[i].goalId || '' : '')}</select></div>`).join('')}
           <span class="hint">${gEnabled() && D.settings.googleTasks ? 'These go to Google Tasks, due in 7 days, and show on your Today screen all week.' : 'These show on your Today screen all week.'}</span></div>
         <div class="row wrap" style="justify-content:flex-end;gap:8px">
           ${UI.reviewEdit ? `<button type="button" class="btn ghost" data-act="r-cancel" style="margin-right:auto">Cancel</button>` : ''}
@@ -1348,30 +1346,34 @@ function contextBlock(daysBack = 7) {
   for (const d of range(addDays(t, -(daysBack - 1)), t)) {
     const dy = D.days[d] || { targets: [] };
     const s = sessionsOn(d), w = workoutsOn(d), j = D.journal[d], wl = wellnessOn(d);
-    const parts = [`targets ${dy.targets.filter(x => x.done).length}/${dy.targets.length}`, `focus ${fmtMin(focusMinOn(d))}${s.length ? ` at ${avgQuality(s)}% quality` : ''}`, `workouts: ${w.map(x => (x.name || wType(x.type).label) + ' ' + x.minutes + 'min' + (x.distance ? ' ' + x.distance + 'km' : '') + (x.avgHr ? ' avgHR ' + x.avgHr : '')).join(', ') || 'none'}`];
+    const parts = [`targets ${dy.targets.filter(x => x.done).length}/${dy.targets.length}`, `focus ${fmtMin(focusMinOn(d))}`, typeof qbOn === 'function' && qbOn(d).length ? `QBank ${qbSum(qbOn(d)).n} questions at ${pctOf(qbSum(qbOn(d)))}%` : '', `workouts: ${w.map(x => (x.name || wType(x.type).label) + ' ' + x.minutes + 'min' + (x.distance ? ' ' + x.distance + 'km' : '') + (x.avgHr ? ' avgHR ' + x.avgHr : '')).join(', ') || 'none'}`];
     if (wl) { if (wl.sleepSecs) parts.push(`sleep ${round1(wl.sleepSecs / 3600)}h`); if (wl.steps) parts.push(`${wl.steps} steps`); if (wl.restingHR) parts.push(`resting HR ${wl.restingHR}`); }
     if (dy.checkin && dy.checkin.energy) parts.push(`morning energy ${dy.checkin.energy}/5`);
     if (j && j.saved) { if (j.mood) parts.push(`mood ${MOODS[j.mood - 1].label}`); const txt = journalText(j).replace(/\s+/g, ' '); if (txt) parts.push(`journal: "${txt.length > 400 ? txt.slice(0, 400) + '…' : txt}"`); }
-    L.push(`- ${shortDay(d)}: ${parts.join('; ')}`);
+    L.push(`- ${shortDay(d)}: ${parts.filter(Boolean).join('; ')}`);
   }
   if (D.anki && D.anki.at) L.push('', '## Anki', `${D.anki.due} cards due, ${ankiToday()} reviewed today, ${ankiStreak()} day Anki streak.`);
   { const aa = ascendAge(); if (aa) L.push('', '## Healthspan', `Ascend Age offset ${aa.offset > 0 ? '+' : ''}${aa.offset} years${aa.bio ? ` (biological ${aa.bio}, real ${Math.floor(aa.age)})` : ''}. Day strain ${strainOn(todayStr()) ?? '?'}/21.`); }
   const nx = nextExam(); if (nx) { const es = examStats(nx); L.push('', '## Exam', `${nx.name} on ${dayName(nx.date)} (${es.daysLeft} days). ${es.learned}/${es.total} topics learned, ${es.strong} strong, ${es.due} revisions due.`); }
+  if (typeof qbTarget === 'function' && D.settings.qbankDaily) L.push('', '## QBank', `Daily target ${qbTarget().n} today. Last 7 days ${qbIn(addDays(t, -6), t).n} questions.`);
+  if (typeof personalNeed === 'function') { const rd = readiness(t); L.push('', '## Recovery', `Sleep need ${personalNeed().need}h, 14-night sleep debt ${sleepDebt(t)}h, lights out ${D.settings.bedTime || '00:30'}, wake ${D.settings.wakeTime || '08:00'}.${rd ? ` Readiness ${rd.score}/100 (${rd.band.label}).` : ''}`); }
   L.push('', `Current streak: ${streak()} days.`);
   return L.join('\n');
 }
 
+// Short, specific replies: a hard word limit and a fixed shape, so the answer gets read
 function coachPrompt(kind) {
   const asks = {
-    plan: `Plan my day. Use my morning check-in, calendar, targets and goals. Give me: (1) the ONE most important thing, (2) a time-blocked schedule for the rest of today with realistic focus blocks (25, 50 or 90 min) and breaks, matched to my energy and sleep, (3) which targets to drop or move if time runs short.`,
-    review: `Review my day honestly. Tell me what went well, what slipped and why (use the data, not guesses), and give me exactly one concrete change for tomorrow. Suggest 3 targets for tomorrow as a bulleted list.`,
-    weekly: `Give me weekly insights. Look for patterns across focus time, focus quality, workouts, sleep, steps, mood and targets. Tell me: my best and worst day and why, how sleep affected my output, one habit to double down on, one thing to stop, and 3 priorities for next week as a bulleted list.`,
-    season: `Do a season check-in on my goals. For each goal say on track, adjust or off track based on the numbers, and give a specific fix for anything behind (for example: move it to mornings, shrink the scope, or batch it). Tell me what to say no to this week.`,
-    pep: `I am losing motivation right now. Give me a short, energetic pep talk grounded in my actual progress (remind me what I have already done), reconnect me with why my goals matter, then give me ONE tiny next step I can start in the next 5 minutes.`,
-    fitness: `Be my fitness coach. Review my workouts, runs, sleep, steps and resting heart rate. Comment on consistency, volume, pace and recovery trends, and give me a simple plan for the next 7 days that fits around my work. Keep injury prevention and recovery in mind.`
+    plan: 'Plan my day. Line 1: the ONE thing that matters most today. Then at most 4 time blocks (start time, what, minutes) that fit my calendar, sleep and energy, QBank before notes. Last line: what to drop if time runs short.',
+    review: 'Review today. Line 1: verdict in under 10 words. Then: what slipped and the real cause (from the numbers), one change for tomorrow, and tomorrow\'s top 3 as a 3-item list.',
+    weekly: 'Review my last 2 weeks. Line 1: the single biggest pattern you see, with its numbers. Then: one thing to keep, one thing to stop, and 3 priorities for next week as a 3-item list.',
+    season: 'Check my goals. One line per goal: on track, adjust or off track, with the number and one concrete fix. Last line: what to say no to this week.',
+    pep: 'I am losing steam. Two lines on what I have actually done (numbers), then ONE step I can start in the next 5 minutes.',
+    fitness: 'Coach my training. Line 1: verdict on recovery and load. Then a 7-day plan, one short line per day, around lifting 5 days, running toward a half marathon and my back pain.'
   };
   const days = ['weekly', 'fitness', 'season'].includes(kind) ? 14 : 7;
-  return `You are my personal performance coach inside my goal-tracking app Ascend. Be warm, direct and energetic. Be specific to my data, never generic. Keep it under 250 words, use short bullet points, and end with one question that keeps me accountable. Do not use em dashes.
+  return `You are my coach inside my app Ascend. I am a final-year MBBS student. Be direct and push me; no greetings, no praise, no motivational filler, no medical explanations. Use my numbers, never generic advice.
+Hard rules: at most 90 words in total. Start with a one-line verdict. Use short lines, no headings, no em dashes. End with one question I must answer with a number.
 
 ${asks[kind]}
 
@@ -1949,12 +1951,12 @@ function saveReviewForm() {
   for (const k of ['win', 'struggle', 'lesson', 'stop', 'obstacle', 'ifthen']) rv[k] = String(fd.get(k) || '').trim();
   if (UI.rate) rv.rating = UI.rate;
   if (typeof areaScores === 'function') rv.balance = areaValues(areaScores(addDays(key, -6), key));
-  const titles = [0, 1, 2].map(i => String(fd.get('p' + i) || '').trim());
+  const titles = [0, 1, 2].map(i => String(fd.get('p' + i) || '').trim()), gids = [0, 1, 2].map(i => String(fd.get('pg' + i) || ''));
   const old = rv.priorities || [];
   const next = [];
   titles.forEach((title, i) => {
     const ex = old[i];
-    if (title) { if (ex) { if (ex.title !== title) { ex.title = title; markDirty(ex); } next.push(ex); } else { const p = { id: uid(), title, done: false }; next.push(p); markDirty(p); } }
+    if (title) { if (ex) { if (ex.title !== title) { ex.title = title; markDirty(ex); } ex.goalId = gids[i]; next.push(ex); } else { const p = { id: uid(), title, done: false, goalId: gids[i] }; next.push(p); markDirty(p); } }
     else if (ex) queueRemoteDelete(ex);
   });
   rv.priorities = next; rv.at = new Date().toISOString();

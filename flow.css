@@ -109,3 +109,4 @@
 .watch-card h3 { color: #8A3B00; }
 .watch-card.red h3 { color: #B42318; }
 .lift-rate .seg button { flex: 1; min-width: 0; padding: 6px 0; }
+.g-prio { font-size: 12.5px; padding: 6px 10px; border-radius: 10px; background: var(--mist-2); }

@@ -175,26 +175,37 @@ function timetableHTML(ex) {
 const hexOr = (c) => c || '#ffffff';
 function sheetPayload(ex) {
   const st = examStats(ex);
-  const overview = [['Ascend revision timetable', ex.name], ['Exam date', ddmm(ex.date) + '/' + ex.date.slice(0, 4)], ['Days left', String(st.daysLeft)], ['Last updated', new Date().toLocaleString()], ['', ''], ['Subject', 'Topics', 'Learned', 'Strong', 'Revisions due']];
-  const ovRows = overview.map(r => [...r, ...Array(5 - r.length).fill('')]);
-  ex.subjects.forEach(s => { const ks = s.topics.map(tp => topicState(tp).key); ovRows.push([s.name, String(ks.length), String(ks.filter(k => k !== 'new').length), String(ks.filter(k => k === 'strong').length), String(ks.filter(k => k === 'due').length)]); });
+  const overview = [['Ascend revision timetable', ex.name], ['Exam date', ddmm(ex.date) + '/' + ex.date.slice(0, 4)], ['Days left', String(st.daysLeft)], ['Last updated', new Date().toLocaleString()], ['', ''], ['Subject', 'Topics', 'Learned', 'Strong', 'Revisions due', 'QBank questions', 'QBank %']];
+  const ovRows = overview.map(r => [...r, ...Array(7 - r.length).fill('')]);
+  const qbOf = (f) => qbSum((D.qbank || []).filter(q => q.exam === ex.id && !q.re && f(q)));
+  ex.subjects.forEach(s => { const ks = s.topics.map(tp => topicState(tp).key), q = qbOf(x => x.sub === s.id); ovRows.push([s.name, String(ks.length), String(ks.filter(k => k !== 'new').length), String(ks.filter(k => k === 'strong').length), String(ks.filter(k => k === 'due').length), String(q.n), q.n ? pctOf(q) + '%' : '']); });
   const tabs = [{ name: 'Overview', values: ovRows, colors: ovRows.map((r, i) => r.map(() => i === 5 ? '#FBEFE7' : '#ffffff')), tab: '#FF6B4A' }];
-  const used = new Set(['Overview']);
+  const used = new Set(['Overview', 'Grand tests']);
+  const accColor = (p) => p == null ? '#ffffff' : p >= 70 ? '#DFF5E7' : p >= 55 ? '#FFF3D6' : '#FFE4DA';
   for (const s of ex.subjects) {
     let name = (s.name || 'Subject').replace(/[\[\]*?:\/\\]/g, ' ').slice(0, 90); while (used.has(name)) name += ' ·'; used.add(name);
     const cols = Math.max(1, ...s.topics.map(tp => sessionsOf(tp).length));
-    const head = ['Topic', ...Array.from({ length: cols }, (_, i) => i ? 'Revision ' + i : 'Learned'), 'Next'];
+    const head = ['Topic', 'QBank Qs', 'QBank %', 'Last QBank', ...Array.from({ length: cols }, (_, i) => i ? 'Revision ' + i : 'Learned'), 'Next'];
     const values = [head], colors = [head.map(() => '#FBEFE7')];
     for (const tp of s.topics) {
-      const ss = sessionsOf(tp), lc = lastConf(tp), nx = nextLabel(tp);
-      values.push([tp.name, ...ss.map(d => ddmm(d) + '/' + d.slice(0, 4)), ...Array(cols - ss.length).fill(''), nx.text]);
-      colors.push([lc ? CONF[lc - 1].c : '#ffffff', ...ss.map(d => CONF[confOn(tp, d) - 1].c), ...Array(cols - ss.length).fill('#ffffff'), nx.cls === 'due' ? '#FFE4DA' : '#ffffff']);
+      const ss = sessionsOf(tp), lc = lastConf(tp), nx = nextLabel(tp), q = qbOf(x => x.top === tp.id), qp = q.n ? pctOf(q) : null;
+      const lastQ = (D.qbank || []).filter(x => x.top === tp.id).map(x => x.date).sort().pop();
+      values.push([tp.name, q.n ? String(q.n) : '', qp == null ? '' : qp + '%', lastQ ? ddmm(lastQ) + '/' + lastQ.slice(0, 4) : '', ...ss.map(d => ddmm(d) + '/' + d.slice(0, 4)), ...Array(cols - ss.length).fill(''), nx.text]);
+      colors.push([lc ? CONF[lc - 1].c : '#ffffff', '#ffffff', accColor(qp), '#ffffff', ...ss.map(d => CONF[confOn(tp, d) - 1].c), ...Array(cols - ss.length).fill('#ffffff'), nx.cls === 'due' ? '#FFE4DA' : '#ffffff']);
     }
+    // Questions done on the whole subject or mixed modules, not tied to one topic
+    const loose = qbOf(x => x.sub === s.id && !x.top);
+    if (loose.n) { values.push(['Whole subject / mixed', String(loose.n), pctOf(loose) + '%', '', ...Array(cols).fill(''), '']); colors.push(values[values.length - 1].map((_, i) => i === 2 ? accColor(pctOf(loose)) : '#ffffff')); }
     tabs.push({ name, values, colors: colors.map(r => r.map(hexOr)), tab: s.color });
   }
+  // Grand tests on their own tab
+  const gts = (D.gts || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+  const gHead = ['Date', 'Test', 'Marking', 'Correct', 'Wrong', 'Skipped', 'Guessed', 'Guesses right', 'Score', 'Out of', '%', 'All-India rank'];
+  const gRows = [gHead, ...gts.map(t => [ddmm(t.date) + '/' + t.date.slice(0, 4), t.name, GT_KINDS[t.kind] ? GT_KINDS[t.kind].label : '', String(t.correct), String(t.wrong), String(t.skipped), t.guessed ? String(t.guessed) : '', t.guessed ? String(t.guessRight || 0) : '', String(gtScore(t)), String(gtMax(t)), gtMax(t) ? Math.round(100 * gtScore(t) / gtMax(t)) + '%' : '', t.rank ? String(t.rank) : ''])];
+  tabs.splice(1, 0, { name: 'Grand tests', values: gRows, colors: gRows.map((r, i) => r.map(() => i === 0 ? '#EFEBFF' : '#ffffff')), tab: '#5A3CF0' });
   return { id: ex.id, title: `Ascend · ${ex.name} revision`, tabs };
 }
-const sheetSig = (ex) => JSON.stringify([todayStr(), ex.name, ex.date, ex.subjects]);
+const sheetSig = (ex) => JSON.stringify([todayStr(), ex.name, ex.date, ex.subjects, (D.qbank || []).filter(q => q.exam === ex.id).length, (D.gts || []).length]);
 async function syncSheet(ex, manual = false) {
   if (!gEnabled()) { if (manual) { toast('Connect Google in Settings first'); go('settings'); } return; }
   try {

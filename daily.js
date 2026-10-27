@@ -123,6 +123,7 @@ function sleepKitCard() {
   const light = activeGoals().find(g => g.metric === 'habit' && /light/i.test(g.name));
   return `<section class="panel sleep-kit"><div class="panel-head"><h3>${icon('moon', 'style="width:16px;height:16px;color:#5A3CF0;vertical-align:-2px"')} Sleep</h3><span class="muted" style="font-size:12px">${w.known ? `woke by ${fmtHM(s.wakeTime || '08:00')} on ${w.held} of ${w.known} days` : 'wake times come from Health Connect'}</span></div>
     <div class="sk-row"><div><span>Wake anchor</span><b>${fmtHM(s.wakeTime || '08:00')}</b></div><div><span>Lights out</span><b>${fmtHM(s.bedTime || '00:30')}</b></div><div><span>Last coffee</span><b>${fmtHM(caffeineCutoff())}</b></div></div>
+    <p style="font-size:12.5px;margin-top:8px">${typeof sleepPlanLine === "function" ? sleepPlanLine() : ""}</p>
     ${step ? `<div class="carry" style="margin-top:10px"><p><b>Anchor held ${w.held}/7.</b> Move lights-out 15 minutes earlier, to ${fmtHM(step)}?</p><button class="btn sm" data-act="bed-step" data-to="${step}">Move it</button></div>`
       : nightMin(hhmmMin(s.bedTime || '00:30')) > nightMin(hhmmMin(s.bedGoal || '00:00')) ? `<p class="muted" style="font-size:12px;margin-top:8px">Lights-out moves toward ${fmtHM(s.bedGoal || '00:00')} in 15-minute steps once you wake by ${fmtHM(s.wakeTime || '08:00')} on 5 of 7 days.</p>` : ''}
     ${light ? '' : `<button class="btn ghost sm" data-act="light-habit" style="margin-top:8px">${icon('sun')}Add a morning-light habit</button>`}</section>`;

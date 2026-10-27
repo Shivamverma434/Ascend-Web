@@ -47,19 +47,31 @@ function rhrToday(date = todayStr()) {
 // ---------- 3. Sleep need and 14-night weighted debt (Kitamura 2016 prior; Rise-style weights) ----------
 const naps = (d) => sum(((D.hc && D.hc.sleep) || []).filter(s => s.nap && s.end.slice(0, 10) === d), s => Math.max(0, s.minutes - (s.awake || 0))) / 60;
 const totalSleep = (d) => { const h = sleepHours(d); return h == null ? null : h + naps(d); };
+// Starts from the hours you choose (7 or 7.5), then moves with your own data:
+//  - nights you slept in (woke over an hour past your usual time; the first night of each run is dropped as rebound)
+//  - how you recover: the shortest sleep after which your next-morning HRV is back at its normal level, from 90
+//    nights of your own data (needs 4+ nights in each half-hour band)
 function personalNeed() {
   return memo('need', () => {
-    const typed = Number(D.settings.sleepBase);
-    const prior = typed && typed !== 7.5 ? typed : ALG.needPrior;
-    // Nights you slept in (woke over an hour past your usual wake time), minus the first night of each run (rebound)
-    const T = todayStr(), wakes = range(addDays(T, -90), T).map(wakeMin).filter(v => v != null);
+    const prior = clamp(Number(D.settings.sleepBase) || 7.5, 6, 9.5);
+    const T = todayStr(), days = range(addDays(T, -90), T);
+    const wakes = days.map(wakeMin).filter(v => v != null);
     const anchor = wakes.length >= 14 ? medianOf(wakes) : hhmmMin(D.settings.wakeTime || '08:00');
     const free = [];
-    for (const d of range(addDays(T, -90), T)) { const w = wakeMin(d), prevW = wakeMin(addDays(d, -1)); if (w != null && w > anchor + 60 && prevW != null && prevW > anchor + 60) { const h = sleepHours(d); if (h) free.push(h); } }
-    const n = free.length, need = n ? (7 * prior + n * medianOf(free)) / (7 + n) : prior;
-    return { need: round1(clamp(need, 6.5, 10)), prior, n };
+    for (const d of days) { const w = wakeMin(d), prevW = wakeMin(addDays(d, -1)); if (w != null && w > anchor + 60 && prevW != null && prevW > anchor + 60) { const h = sleepHours(d); if (h) free.push(h); } }
+    const pairs = days.map(d => [sleepHours(d), (wellnessOn(d) || {}).hrv]).filter(([h, v]) => h && v > 0).map(([h, v]) => [h, Math.log(v)]);
+    let rec = null;
+    if (pairs.length >= 20) {
+      const med = medianOf(pairs.map(p => p[1])), bands = [6, 6.5, 7, 7.5, 8, 8.5];
+      const ok = bands.map(lo => { const xs = pairs.filter(p => p[0] >= lo && p[0] < lo + 0.5).map(p => p[1] - med); return xs.length >= 4 ? mean(xs) >= 0 : null; });
+      for (let i = 0; i < bands.length; i++) if (ok[i] === true && ok.slice(i).every(x => x !== false)) { rec = bands[i] + 0.25; break; }
+    }
+    const nF = free.length, wR = rec ? 10 : 0;
+    const need = (7 * prior + (nF ? nF * medianOf(free) : 0) + wR * (rec || 0)) / (7 + nF + wR);
+    return { need: round1(clamp(need, 6, 9.5)), prior, n: nF, rec, sleepIn: nF ? round1(medianOf(free)) : null };
   });
 }
+document.addEventListener('change', (e) => { if (e.target.matches('[data-act=need-pick]')) { D.settings.sleepBase = Number(e.target.value); AGEMEMO.at = 0; save(); toast(`Sleep need starts at ${e.target.value} h and adjusts from your data`); rerender(); } });
 sleepNeed = function () { return personalNeed().need; };
 sleepDebt = function (date = todayStr()) {
   const need = personalNeed().need; let num = 0, den = 0;
@@ -193,7 +205,7 @@ function sleepScience() {
   const row = (label, value, sub = '') => `<div class="vital"><span>${label}</span><b>${value}</b>${sub ? `<em>${sub}</em>` : ''}</div>`;
   return `<section class="panel" style="margin-top:18px"><div class="panel-head"><h3>${icon('moon', 'style="width:16px;height:16px;color:#5A3CF0;vertical-align:-2px"')} Sleep and recovery, worked out</h3><span class="muted" style="font-size:12px">updated from your data</span></div>
     <div class="vital-grid">
-      ${row('Sleep need', `${p.need} h`, p.n ? `from ${p.n} sleep-in nights` : 'starting from 8.4 h, the lab average for young men')}
+      <div class="vital"><span>Sleep need</span><b>${p.need} h</b><em>starts at <select class="need-pick" data-act="need-pick">${[7, 7.5].map(v => `<option value="${v}" ${p.prior === v ? 'selected' : ''}>${v} h</option>`).join('')}</select>${p.rec ? ` · HRV recovers after ${p.rec} h` : ''}${p.n ? ` · ${p.n} sleep-in nights at ${p.sleepIn} h` : ''}${!p.rec && !p.n ? ' · adjusts as your data builds' : ''}</em></div>
       ${row('Your window allows', `${c.hours} h`, `${c.inBed} h in bed at ${Math.round(c.eff * 100)}% efficiency`)}
       ${row('Sleep debt', `${debt} h`, '14 nights, recent ones count more, naps count')}
       ${cont ? row('Sleep efficiency', `${cont.eff}%`, `awake ${cont.waso} min · 2-week ${cont.eff14}%`) : ''}
@@ -332,3 +344,10 @@ document.addEventListener('click', (e) => {
 // ---------- Where it shows ----------
 const healthHubAlg = VIEWS.health;
 VIEWS.health = () => healthHubAlg() + (UI.htab === 'span' ? phenoCard() : sleepScience() + runScience() + bodyScience());
+
+// One sleep plan, said the same way on Today and on Health: your lights-out and wake anchor, what that window
+// allows, your need and your debt
+function sleepPlanLine() {
+  const s = D.settings, p = personalNeed(), c = sleepCeiling(), debt = sleepDebt();
+  return `Lights out <b>${fmtHM(s.bedTime || '00:30')}</b>, up at <b>${fmtHM(s.wakeTime || '08:00')}</b>: about <b>${c.hours} h</b> of sleep against your need of <b>${p.need} h</b>${debt >= 1 ? `, with ${debt} h of debt` : ''}.${c.hours < p.need - 0.2 ? ' Bring lights-out earlier, keep the wake time.' : ''}`;
+}
