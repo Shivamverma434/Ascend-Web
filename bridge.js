@@ -147,7 +147,7 @@
     closePopup: async () => closePopup(),
     popupAction: async (a) => runAction(a),
     setLogin: async () => {},
-    info: async () => ({ version: '1.9.0', platform: 'web' }),
+    info: async () => ({ version: '1.9.1', platform: 'web' }),
     google, intervals, notion, web, backups,
     anki: async () => ({ error: 'Anki is read on your laptop and synced here.' }),
     trayStatus: async () => {},

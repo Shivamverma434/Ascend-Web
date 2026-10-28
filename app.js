@@ -243,7 +243,9 @@ function wellnessOn(date) {
   const w = D.wellness[date], h = D.hc && D.hc.days && D.hc.days[date];
   if (!h) return w || null;
   const m = { ...(w || {}) };
-  for (const [k, hk] of [['steps', 'steps'], ['sleepSecs', 'sleepSecs'], ['restingHR', 'rhr'], ['hrv', 'hrv'], ['vo2max', 'vo2'], ['weight', 'weight']]) if (m[k] == null && h[hk] != null) m[k] = h[hk];
+  // Health Connect comes straight from the watch, with sleep stages and nightly HRV, so it wins; intervals.icu fills gaps
+  for (const [k, hk] of [['sleepSecs', 'sleepSecs'], ['restingHR', 'rhr'], ['hrv', 'hrv'], ['vo2max', 'vo2'], ['weight', 'weight']]) if (h[hk] != null) m[k] = h[hk];
+  if (h.sleepSecs != null) m.sleepSrc = 'hc';
   // Steps: intervals.icu can hold an early or partial count for today, so the higher of the two wins
   if (h.steps != null && (m.steps == null || h.steps > m.steps)) m.steps = h.steps;
   for (const k of ['hrPeak', 'fat', 'lean', 'heightCm', 'bmr', 'activeKcal', 'totalKcal', 'km', 'floors', 'waterL', 'spo2', 'resp', 'sys', 'dia', 'glucose', 'tempC']) if (m[k] == null && h[k] != null) m[k] = h[k];
@@ -677,7 +679,7 @@ function openCheckin() {
       <div class="ci-title"><span class="muted-w">${dayName(t)}</span><h2>Good morning${D.settings.name ? ', ' + esc(D.settings.name) : ''}</h2></div></div>
     <form data-form-local="checkin">
       <div class="ci-grid">
-        <div class="field"><label>${icon('bed', 'class="lab-ic"')} Sleep (hours)</label><input class="input" name="sleepH" type="number" step="0.1" min="0" max="16" value="${esc(ci.sleepH || autoSleep)}" placeholder="7.5">${autoSleep ? `<span class="hint">From your Amazfit via intervals.icu${w.sleepScore ? `, score ${w.sleepScore}` : ''}</span>` : ''}</div>
+        <div class="field"><label>${icon('bed', 'class="lab-ic"')} Sleep (hours)</label><input class="input" name="sleepH" type="number" step="0.1" min="0" max="16" value="${esc(ci.sleepH || autoSleep)}" placeholder="7.5">${autoSleep ? `<span class="hint">From your watch via ${w.sleepSrc === 'hc' ? 'Health Connect' : 'intervals.icu'}${w.sleepScore ? `, score ${w.sleepScore}` : ''}</span>` : ''}</div>
         <div class="field"><label>Sleep quality</label>${segRow('sleepQ', SLEEPQ)}</div>
       </div>
       <div class="field"><label>${icon('bolt', 'class="lab-ic"')} Energy</label>${segRow('energy', ENERGY)}</div>

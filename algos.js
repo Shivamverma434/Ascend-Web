@@ -351,3 +351,20 @@ function sleepPlanLine() {
   const s = D.settings, p = personalNeed(), c = sleepCeiling(), debt = sleepDebt();
   return `Lights out <b>${fmtHM(s.bedTime || '00:30')}</b>, up at <b>${fmtHM(s.wakeTime || '08:00')}</b>: about <b>${c.hours} h</b> of sleep against your need of <b>${p.need} h</b>${debt >= 1 ? `, with ${debt} h of debt` : ''}.${c.hours < p.need - 0.2 ? ' Bring lights-out earlier, keep the wake time.' : ''}`;
 }
+
+// ---------- Sleep stages from Health Connect (shown, not scored: stage percentages have no agreed targets) ----------
+function stagesPanel() {
+  const T = todayStr(), nights = range(addDays(T, -13), T).map(d => ({ d, s: sleepEnding(d) })).filter(x => x.s && x.s.staged);
+  if (!nights.length) return '';
+  const C = { deep: '#3B2A8F', rem: '#8B6CF0', light: '#BFB2FF', awake: '#F2A65A' };
+  const bar = (s) => { const t = Math.max(1, (s.deep || 0) + (s.rem || 0) + (s.light || 0) + (s.awake || 0)); return `<div class="stage-bar">${['deep', 'rem', 'light', 'awake'].map(k => `<i style="width:${100 * (s[k] || 0) / t}%;background:${C[k]}" title="${k} ${s[k] || 0} min"></i>`).join('')}</div>`; };
+  const last = nights[nights.length - 1].s, avg = (k) => Math.round(mean(nights.map(x => x.s[k] || 0)));
+  const hm2 = (m) => `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
+  return `<section class="panel" style="margin-top:18px"><div class="panel-head"><h3>${icon('moon', 'style="width:16px;height:16px;color:#3B2A8F;vertical-align:-2px"')} Sleep stages</h3><span class="muted" style="font-size:12px">from Health Connect · ${nights.length} nights</span></div>
+    <p class="muted" style="font-size:12px;margin-bottom:6px">Last night (${shortDay(nights[nights.length - 1].d)}), in bed ${fmtTime(last.start)} to ${fmtTime(last.end)}</p>${bar(last)}
+    <div class="stage-legend">${['deep', 'rem', 'light', 'awake'].map(k => `<span><i style="background:${C[k]}"></i>${k === 'rem' ? 'REM' : k[0].toUpperCase() + k.slice(1)} <b>${hm2(last[k] || 0)}</b> <em>avg ${hm2(avg(k))}</em></span>`).join('')}</div>
+    <div class="stage-nights">${nights.map(x => `<div title="${shortDay(x.d)}">${bar(x.s)}<span>${parseDay(x.d).getDate()}</span></div>`).join('')}</div>
+    <p class="muted" style="font-size:11.5px;margin-top:8px">Watches estimate stages from movement and heart rate, so treat single nights loosely. Ascend scores sleep on duration, timing and how often you wake, not on stage shares.</p></section>`;
+}
+const healthHubStages = VIEWS.health;
+VIEWS.health = () => { const html = healthHubStages(); if (UI.htab === 'span') return html; const i = html.indexOf('<section class="panel" style="margin-top:18px"><div class="panel-head"><h3>' + icon('run', 'style="width:16px;height:16px;color:var(--ember);vertical-align:-2px"')); return i < 0 ? html + stagesPanel() : html.slice(0, i) + stagesPanel() + html.slice(i); };

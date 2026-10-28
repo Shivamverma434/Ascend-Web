@@ -110,3 +110,11 @@
 .watch-card.red h3 { color: #B42318; }
 .lift-rate .seg button { flex: 1; min-width: 0; padding: 6px 0; }
 .g-prio { font-size: 12.5px; padding: 6px 10px; border-radius: 10px; background: var(--mist-2); }
+.stage-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--mist-2); }
+.stage-bar i { display: block; height: 100%; }
+.stage-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0; font-size: 12px; color: var(--ink-2); }
+.stage-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.stage-legend em { font-style: normal; color: var(--ink-3); }
+.stage-nights { display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; }
+.stage-nights div { display: flex; flex-direction: column; gap: 3px; align-items: center; font-size: 10px; color: var(--ink-3); }
+.stage-nights .stage-bar { height: 8px; width: 100%; }
