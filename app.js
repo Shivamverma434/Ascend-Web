@@ -27,6 +27,16 @@ const bridge = window.ascend || (() => {
 
 const ASCEND_IS_MOBILE = !!window.ASCEND_MOBILE;
 
+// ---------- Light or dark: Settings > Appearance, or follow the device ----------
+const darkQuery = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+function applyTheme() {
+  const pick = (typeof D !== 'undefined' && D && D.settings && D.settings.theme) || 'system';
+  const dark = pick === 'dark' || (pick === 'system' && !!(darkQuery && darkQuery.matches));
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = dark ? '#150F18' : '#FFF7F0';
+}
+if (darkQuery) darkQuery.addEventListener('change', () => applyTheme());
+
 // ---------- Small helpers ----------
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -245,9 +255,9 @@ function wellnessOn(date) {
   const m = { ...(w || {}) };
   // Health Connect comes straight from the watch, with sleep stages and nightly HRV, so it wins; intervals.icu fills gaps
   for (const [k, hk] of [['sleepSecs', 'sleepSecs'], ['restingHR', 'rhr'], ['hrv', 'hrv'], ['vo2max', 'vo2'], ['weight', 'weight']]) if (h[hk] != null) m[k] = h[hk];
-  if (h.sleepSecs != null) m.sleepSrc = 'hc';
-  // Steps: intervals.icu can hold an early or partial count for today, so the higher of the two wins
-  if (h.steps != null && (m.steps == null || h.steps > m.steps)) m.steps = h.steps;
+  // One source per number, never a mix: intervals.icu's sleep score only stays when it rated the same night
+  if (h.sleepSecs != null) { if (w && w.sleepSecs != null && Math.abs(w.sleepSecs - h.sleepSecs) > 1800) delete m.sleepScore; m.sleepSrc = 'hc'; }
+  if (h.steps != null) m.steps = h.steps;
   for (const k of ['hrPeak', 'fat', 'lean', 'heightCm', 'bmr', 'activeKcal', 'totalKcal', 'km', 'floors', 'waterL', 'spo2', 'resp', 'sys', 'dia', 'glucose', 'tempC']) if (m[k] == null && h[k] != null) m[k] = h[k];
   return m;
 }
@@ -1452,6 +1462,7 @@ function viewSettings() {
     <section class="panel">
       <h3 class="set-h">${icon('heart')} You</h3>
       <div class="field"><label>Your name</label><input class="input" name="name" value="${esc(s.name)}" placeholder="Used in greetings"></div>
+      <div class="row"><div class="field grow"><label>Appearance</label><select class="input" name="theme">${[['system', 'Match this device'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<option value="${v}" ${(s.theme || 'system') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
       <div class="row"><div class="field grow"><label>Your cat's name</label><input class="input" name="buddyName" value="${esc(s.buddyName || 'Mochi')}" maxlength="20"></div></div>
       <label class="row toggle-row"><input type="checkbox" name="buddy" ${s.buddy !== false ? 'checked' : ''}> Show ${esc(s.buddyName || 'Mochi')}, the cat who keeps you company</label>
       <h3 class="set-h">${icon('clock')} Reminders</h3>
@@ -1905,6 +1916,7 @@ document.addEventListener('submit', (e) => {
       const changed = (k) => k in now && (!(k in shown) || shown[k] !== now[k]);
       for (const k of ['name', 'buddyName', 'notionToken', 'dob', 'sex', 'maxHr', 'sleepBase', 'heightCm', 'bodyFat', 'leanKg', 'weightKg', 'activeStart', 'activeEnd', 'morningTime', 'journalTime', 'weeklyTime', 'bedTime', 'wakeTime', 'bedGoal', 'restUntil', 'calendarUrl', 'notionUrl', 'intervalsKey', 'intervalsAthlete', 'chessSite', 'chessUser', 'goodreadsUrl']) if (changed(k)) s[k] = String(fd.get(k) || '').trim();
       if (changed('nudgeMode')) { const v = String(fd.get('nudgeMode')); if (v.startsWith('h')) { s.nudgeMode = 'hours'; s.nudgeEveryHours = Number(v.slice(1)) || 2; } else s.nudgeMode = v; }
+      if (changed('theme')) { s.theme = String(fd.get('theme')); applyTheme(); }
       if (changed('proteinTarget')) s.proteinTarget = Number(fd.get('proteinTarget')) || 0;
       if (changed('weeklyDay')) s.weeklyDay = Number(fd.get('weeklyDay')) || 0;
       if (changed('bedLead')) s.bedLead = Number(fd.get('bedLead')) || 0;
@@ -2133,6 +2145,9 @@ async function boot() {
   META = { dataDir: r.dataDir, file: r.file, detectedDrive: r.detectedDrive };
   D = migrate(r.data || defaults());
   primeStamps(D);
+  applyTheme();
+  // Older versions could count a night or a workout from two sources twice: repair that before anything is shown
+  if (typeof cleanSources === 'function') cleanSources();
   if (ASCEND_IS_MOBILE) document.body.classList.add('mobile');
   save();
   go('today');

@@ -48,18 +48,86 @@ const stdev = (a) => { const m = mean(a); return Math.sqrt(mean(a.map(x => (x - 
 // Exercise types from Health Connect's ExerciseSessionRecord
 const HC_TYPES = { 56: 'run', 57: 'run', 79: 'walk', 37: 'walk', 8: 'cycling', 9: 'cycling', 73: 'swim', 74: 'swim', 70: 'strength', 81: 'strength', 13: 'strength', 83: 'yoga', 48: 'yoga', 71: 'yoga', 36: 'hiit', 25: 'hiit', 54: 'hiit' };
 const startMs = (w) => w.at ? +new Date(w.at) : null;
-// The same session recorded twice: within 30 minutes, or same type that day when one has no start time
+// Two time ranges are one recording when they share at least half of the shorter one (or, without a length, start
+// within 15 minutes). A 2-minute jog just before a walk does not overlap it, so both stay.
+function overlaps(s1, m1, s2, m2) {
+  if (!s1 || !s2) return false;
+  if (!m1 || !m2) return Math.abs(s1 - s2) < 15 * 60e3;
+  const shared = Math.min(s1 + m1 * 60e3, s2 + m2 * 60e3) - Math.max(s1, s2);
+  return shared > 0 && shared >= 0.5 * Math.min(m1, m2) * 60e3;
+}
+// Watch sources (intervals.icu, Health Connect) know when a session started. A workout you logged by hand only knows
+// when you logged it, so it matches on the day, the type and a similar length instead.
+const timed = (w) => w.source === 'intervals' || w.source === 'hc';
 function sameSession(a, b) {
   if (a.date !== b.date) return false;
-  const x = startMs(a), y = startMs(b);
-  return x && y ? Math.abs(x - y) < 30 * 60e3 : a.type === b.type;
+  if (timed(a) && timed(b)) return overlaps(startMs(a), a.minutes || 0, startMs(b), b.minutes || 0);
+  if (a.type !== b.type) return false;
+  const x = a.minutes || 0, y = b.minutes || 0;
+  return !x || !y || Math.abs(x - y) <= 0.35 * Math.max(x, y);
 }
-// intervals.icu and your own logs win over Health Connect, which knows less about each session
+// One session, one record. intervals.icu knows the most (distance, heart rate, load), then your own log, then Health
+// Connect; between equals the longer recording wins. Effort and notes you added carry over to the one that is kept.
+const WORKOUT_RANK = { intervals: 3, hc: 1 };
 function dedupeWorkouts() {
-  const own = D.workouts.filter(w => w.source !== 'hc'), n = D.workouts.length;
-  D.workouts = D.workouts.filter(w => w.source !== 'hc' || !own.some(o => sameSession(o, w)));
+  const rank = (w) => WORKOUT_RANK[w.source] ?? 2, n = D.workouts.length;
+  const order = D.workouts.slice().sort((a, b) => rank(b) - rank(a) || (b.minutes || 0) - (a.minutes || 0));
+  const kept = [];
+  for (const w of order) {
+    // Duplicates come from two sources. Two intervals.icu activities, or two sessions you logged yourself, are both
+    // real; Health Connect can hold one session twice because several apps write to it.
+    const k = kept.find(o => (o.source !== w.source || w.source === 'hc') && (timed(o) || timed(w)) && sameSession(o, w));
+    if (!k) { kept.push(w); continue; }
+    if (!k.effort && w.effort) k.effort = w.effort;
+    if (!k.notes && w.notes) k.notes = w.notes;
+  }
+  if (kept.length === n) return 0;
+  const keep = new Set(kept);
+  D.workouts = D.workouts.filter(w => keep.has(w));
   return n - D.workouts.length;
 }
+// Health Connect can hold the same night or session twice when two apps write to it (Zepp and Samsung Health, say).
+// Keep one: sleep with stages first, then the longest.
+function dedupeSleeps(list) {
+  const kept = [];
+  const order = (list || []).slice().sort((a, b) => (b.staged ? 1 : 0) - (a.staged ? 1 : 0) || (b.minutes || 0) - (a.minutes || 0));
+  for (const s of order) if (!kept.some(k => overlaps(+new Date(k.start), k.minutes || 0, +new Date(s.start), s.minutes || 0))) kept.push(s);
+  return kept.sort((a, b) => String(a.start).localeCompare(String(b.start)));
+}
+function dedupeHcExercise(list) {
+  const kept = [];
+  for (const e of (list || []).slice().sort((a, b) => (b.minutes || 0) - (a.minutes || 0))) {
+    if (!kept.some(k => k.date === e.date && overlaps(+new Date(k.start), k.minutes || 0, +new Date(e.start), e.minutes || 0))) kept.push(e);
+  }
+  return kept.sort((a, b) => String(a.start).localeCompare(String(b.start)));
+}
+// Daily asleep time from the main sleeps that end that morning
+function hcSleepTotals(hc) {
+  for (const day of Object.values(hc.days || {})) delete day.sleepSecs;
+  for (const s of hc.sleep || []) {
+    if (s.nap) continue;
+    const day = hc.days[s.end.slice(0, 10)] = hc.days[s.end.slice(0, 10)] || {};
+    day.sleepSecs = (day.sleepSecs || 0) + Math.max(0, s.minutes - (s.awake || 0)) * 60;
+  }
+}
+// Repairs data where two sources were both counted: run at start-up and after every sync with another device.
+// Returns how many duplicate records it removed.
+function cleanSources() {
+  if (!D) return 0;
+  let n = 0;
+  const hc = D.hc;
+  if (hc && Array.isArray(hc.sleep)) {
+    const sleep = dedupeSleeps(hc.sleep);
+    if (sleep.length !== hc.sleep.length) { n += hc.sleep.length - sleep.length; hc.sleep = sleep; hcSleepTotals(hc); }
+  }
+  if (hc && Array.isArray(hc.exercise)) {
+    const ex = dedupeHcExercise(hc.exercise);
+    if (ex.length !== hc.exercise.length) { n += hc.exercise.length - ex.length; hc.exercise = ex; }
+  }
+  n += dedupeWorkouts();
+  return n;
+}
+function onCloudMerged() { if (cleanSources()) { save(); rerender(); } }
 function importHcWorkouts() {
   let added = 0;
   for (const e of (D.hc && D.hc.exercise) || []) {
@@ -69,7 +137,7 @@ function importHcWorkouts() {
     const w = { date: e.date, at: e.start || '', type: HC_TYPES[e.type] || 'other', name: e.title || '', minutes: e.minutes };
     const cur = D.workouts.find(x => x.id === id);
     if (cur) { if (cur.minutes !== w.minutes || cur.type !== w.type || cur.name !== w.name) Object.assign(cur, w); continue; }
-    if (D.workouts.some(o => o.source !== 'hc' && sameSession(o, w))) continue;
+    if (D.workouts.some(o => sameSession(o, { ...w, source: 'hc' }))) continue;
     D.workouts.push({ id, source: 'hc', distance: 0, effort: 0, notes: '', ...w }); added++;
   }
   dedupeWorkouts();

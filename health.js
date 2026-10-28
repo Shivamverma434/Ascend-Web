@@ -29,19 +29,15 @@ async function syncHealth(manual = false) {
     Object.assign(hc.days, r.days || {});
     // Main sleep vs naps; total asleep time goes to the morning you woke up
     const seen = new Set();
-    const sleep = [...(hc.sleep || []).filter(s => s.end.slice(0, 10) < from), ...(r.sleep || [])].filter(s => { const k = s.start + '|' + s.end; return !seen.has(k) && seen.add(k); }).map(s => {
+    // The same night written by two apps counts once
+    const sleep = dedupeSleeps([...(hc.sleep || []).filter(s => s.end.slice(0, 10) < from), ...(r.sleep || [])].filter(s => { const k = s.start + '|' + s.end; return !seen.has(k) && seen.add(k); })).map(s => {
       const sh = Number(s.start.slice(11, 13));
       return { ...s, nap: s.minutes < 180 && sh >= 9 && sh < 20 };
     });
-    for (const day of Object.values(hc.days)) delete day.sleepSecs;
-    for (const s of sleep) {
-      if (s.nap) continue;
-      const d = s.end.slice(0, 10); const day = hc.days[d] = hc.days[d] || {};
-      day.sleepSecs = (day.sleepSecs || 0) + Math.max(0, s.minutes - (s.awake || 0)) * 60;
-    }
     const keep = addDays(todayStr(), -200);
     hc.sleep = sleep.filter(s => s.end.slice(0, 10) >= keep);
-    hc.exercise = [...(hc.exercise || []).filter(e => e.date < from), ...(r.exercise || [])].filter(e => e.date >= keep);
+    hcSleepTotals(hc);
+    hc.exercise = dedupeHcExercise([...(hc.exercise || []).filter(e => e.date < from), ...(r.exercise || [])].filter(e => e.date >= keep));
     // Meals logged in a food app: kept for 60 days (protein per meal)
     if (Array.isArray(r.meals)) hc.meals = [...(hc.meals || []).filter(e => e.date < from), ...r.meals].filter(e => e.date >= addDays(todayStr(), -60));
     for (const k of Object.keys(hc.days)) if (k < keep) delete hc.days[k];

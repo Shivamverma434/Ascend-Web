@@ -1,0 +1,102 @@
+/* Ascend: dark mode. Loaded last. Remaps the colour tokens to a dusk palette and repaints the places that were
+   written as plain white or cream. Turned on by data-theme="dark" on <html> (Settings > Appearance). */
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #150F18;
+  --surface: #211926;
+  --ink: #F4ECF1;
+  --ink-2: #CDBDC8;
+  --ink-3: #9A8794;
+  --mist: #362A3B;
+  --mist-2: #2A2030;
+  --ember: #FF7A59;
+  --ember-soft: #3D2320;
+  --violet: #C38BD6;
+  --violet-soft: #33223B;
+  --volt: #FFC24B;
+  --volt-ink: #FFD98A;
+  --pink: #FF6B93;
+  --gold: #FFC24B;
+  --on: #4CC489;
+  --on-soft: #183428;
+  --adjust: #F5B04A;
+  --adjust-soft: #3A2C17;
+  --off: #FF6B6E;
+  --off-soft: #3D1D21;
+  --glow: 0 10px 30px -12px rgba(255, 107, 74, .35);
+}
+
+/* Page and sky */
+[data-theme="dark"] body { background: var(--paper); }
+[data-theme="dark"] body::before {
+  background:
+    radial-gradient(circle at 18% 22%, rgba(255, 122, 89, .12), transparent 40%),
+    radial-gradient(circle at 82% 78%, rgba(195, 139, 214, .10), transparent 42%),
+    radial-gradient(circle at 64% 8%, rgba(255, 194, 75, .07), transparent 36%);
+}
+[data-theme="dark"] .rail { background: linear-gradient(180deg, #24152B 0%, #1A1120 60%, #140D18 100%); }
+
+/* Cards and surfaces that were plain white */
+[data-theme="dark"] .panel, [data-theme="dark"] .stat, [data-theme="dark"] .goal, [data-theme="dark"] .coach-card,
+[data-theme="dark"] .modal, [data-theme="dark"] .align-row, [data-theme="dark"] .area-row.on, [data-theme="dark"] .area-ic,
+[data-theme="dark"] .type-picker button, [data-theme="dark"] .mood button, [data-theme="dark"] .target:hover,
+[data-theme="dark"] kbd, [data-theme="dark"] .je, [data-theme="dark"] .note, [data-theme="dark"] .conn {
+  background: var(--surface); border-color: var(--mist);
+}
+[data-theme="dark"] .panel, [data-theme="dark"] .stat, [data-theme="dark"] .goal, [data-theme="dark"] .je, [data-theme="dark"] .note {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px -18px rgba(0, 0, 0, .6);
+}
+[data-theme="dark"] .nav button.active, [data-theme="dark"] .nav-ind { background: #33243A; color: var(--ink); }
+[data-theme="dark"] .check { background: transparent; border-color: var(--ink-3); }
+[data-theme="dark"] .timer-wrap .seg button.on, [data-theme="dark"] .ridge-label { background: var(--ink); color: var(--paper); }
+[data-theme="dark"] .pair-box img { background: #fff; }
+[data-theme="dark"] .skeleton { background: linear-gradient(90deg, var(--mist-2) 0%, var(--mist) 50%, var(--mist-2) 100%); background-size: 200% 100%; }
+[data-theme="dark"] .deep-section { background: linear-gradient(180deg, var(--mist-2), var(--surface)); }
+[data-theme="dark"] .freewrite { background-color: var(--surface); }
+[data-theme="dark"] .ev.mine .ev-card { background: linear-gradient(90deg, var(--ember-soft), var(--surface)); }
+[data-theme="dark"] .conn.on { border-color: #2E5E44; background: linear-gradient(180deg, #1B2A22, var(--surface) 40%); }
+[data-theme="dark"] .conn.warn { border-color: #6B5320; background: linear-gradient(180deg, #2E2414, var(--surface) 50%); }
+
+/* Inputs */
+[data-theme="dark"] .input, [data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea {
+  background-color: #1A131E; border-color: var(--mist); color: var(--ink);
+}
+[data-theme="dark"] input::placeholder, [data-theme="dark"] textarea::placeholder { color: #7D6B78; }
+[data-theme="dark"] option { background: #211926; color: var(--ink); }
+
+/* Tinted tags and notices */
+[data-theme="dark"] .ex-topic.strong { background: #3A2E14; }
+[data-theme="dark"] .conn-ic.notion { background: #2E2A28; }
+[data-theme="dark"] .conn-ic.hc { background: #3D1F2A; }
+[data-theme="dark"] .conn-ic.iv, [data-theme="dark"] .conn-ic.hobby { background: var(--ember-soft); }
+[data-theme="dark"] .badge.on { background: linear-gradient(135deg, #3A2E14, #3D2320); }
+[data-theme="dark"] .stat.accent, [data-theme="dark"] .review-hero .stat.accent { background: linear-gradient(135deg, #8A5A10, #A8742A); color: #fff; }
+[data-theme="dark"] .spike { background: #3A2316; color: #FFC9A0; }
+[data-theme="dark"] .conf-tag.medium { background: #3A2E14; color: #FFD98A; }
+[data-theme="dark"] .conf-tag.high { background: #183428; color: #8EE0B4; }
+[data-theme="dark"] .watch-card.red { background: #2E1719; }
+[data-theme="dark"] .watch-card h3 { color: #FFB38A; }
+[data-theme="dark"] .watch-card.red h3 { color: #FF8A8C; }
+[data-theme="dark"] .auto-tag { color: #6FD6DE; background: #15343A; }
+[data-theme="dark"] .qb-first { color: #C9B8FF; background: #2A2240; border-color: #8C74F5; }
+[data-theme="dark"] .qb-line { background: #2A2240; }
+[data-theme="dark"] .meal.hit { background: #15343A; color: #6FD6DE; }
+[data-theme="dark"] .food-chips .chip b { color: #6FD6DE; }
+
+/* Full-screen quote scene */
+[data-theme="dark"] .qs { background: radial-gradient(120% 90% at 20% 10%, color-mix(in srgb, var(--c) 22%, #150F18) 0%, #150F18 55%, #1E1420 100%); }
+
+/* Phone layout */
+[data-theme="dark"] .mobile .modal-actions { background: var(--surface); }
+[data-theme="dark"] .more-ic { background: var(--mist-2); }
+
+/* Cards that were painted with the text colour, which is light in dark mode: give them a fixed deep plum */
+[data-theme="dark"] .ready { background: radial-gradient(120% 140% at 0% 0%, #6B2E63 0%, #1B1220 70%); }
+[data-theme="dark"] .ready.band-push { background: radial-gradient(120% 140% at 0% 0%, #2F7A55 0%, #1B1220 75%); }
+[data-theme="dark"] .ready.band-easy { background: radial-gradient(120% 140% at 0% 0%, #A0581A 0%, #1B1220 75%); }
+[data-theme="dark"] .ready.band-rest { background: radial-gradient(120% 140% at 0% 0%, #8E2B3A 0%, #1B1220 75%); }
+[data-theme="dark"] .coach-note { background: linear-gradient(160deg, #2E1F3A, #1B1220); }
+[data-theme="dark"] .coach-pill.selected, [data-theme="dark"] .btn.dark, [data-theme="dark"] .ci-num { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+[data-theme="dark"] .tip, [data-theme="dark"] .prompt-card { background: #352839; color: var(--ink); }
+[data-theme="dark"] .qs-sweep .qs-text { background-image: linear-gradient(90deg, var(--ink) 45%, var(--c) 50%, transparent 55%); }
