@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ascend: study, sleep and train in one plan</title>
+<meta name="description" content="Ascend is a planner for students in exam season. It plans your revision, tracks QBank and grand tests, and reads sleep, workouts and Anki on its own.">
+<meta property="og:title" content="Ascend">
+<meta property="og:description" content="Study hard, sleep enough, keep climbing. A planner that logs itself.">
+<meta property="og:image" content="img/01-today.png">
+<link rel="icon" href="img/icon.png">
+<style>
+  @font-face { font-family: 'Bricolage'; src: url(../fonts/bricolage-grotesque-latin-700-normal.woff2) format('woff2'); font-weight: 700; font-display: swap; }
+  @font-face { font-family: 'Bricolage'; src: url(../fonts/bricolage-grotesque-latin-800-normal.woff2) format('woff2'); font-weight: 800; font-display: swap; }
+  @font-face { font-family: 'Inter'; src: url(../fonts/inter-latin-400-normal.woff2) format('woff2'); font-weight: 400; font-display: swap; }
+  @font-face { font-family: 'Inter'; src: url(../fonts/inter-latin-600-normal.woff2) format('woff2'); font-weight: 600; font-display: swap; }
+
+  :root {
+    --bg: #FFF7F0; --bg-2: #FFFFFF; --ink: #1F1530; --ink-2: #5B5070; --ink-3: #8E86A0; --line: #F0E4DA;
+    --ember: #FF6B4A; --pink: #F0508C; --violet: #5A3CF0; --teal: #0E9AA7; --gold: #F5B83D;
+    --hero: linear-gradient(135deg, #FFB86B 0%, #FF6B4A 35%, #F0508C 70%, #8B4C9E 100%);
+    --shadow: 0 20px 60px rgba(60, 20, 60, .14), 0 4px 14px rgba(60, 20, 60, .08);
+    --display: 'Bricolage', 'Segoe UI', system-ui, sans-serif;
+  }
+  :root[data-theme="dark"] { --bg: #17111F; --bg-2: #221A2D; --ink: #F6F0FA; --ink-2: #C7BCD6; --ink-3: #8F84A3; --line: #33283F; --shadow: 0 20px 60px rgba(0, 0, 0, .45); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #17111F; --bg-2: #221A2D; --ink: #F6F0FA; --ink-2: #C7BCD6; --ink-3: #8F84A3; --line: #33283F; --shadow: 0 20px 60px rgba(0, 0, 0, .45); } }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.6 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  img { max-width: 100%; display: block; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+  h1, h2, h3 { font-family: var(--display); line-height: 1.1; margin: 0; letter-spacing: -.01em; }
+  h2 { font-size: clamp(30px, 4.4vw, 44px); font-weight: 800; }
+  h3 { font-size: 22px; font-weight: 700; }
+  p { margin: 0; color: var(--ink-2); }
+  .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ember); margin-bottom: 12px; }
+
+  /* Nav */
+  header { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+  nav { display: flex; align-items: center; gap: 24px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-weight: 800; font-size: 21px; text-decoration: none; }
+  .brand img { width: 32px; height: 32px; border-radius: 8px; }
+  .links { display: flex; gap: 22px; margin-left: auto; font-size: 15px; font-weight: 600; }
+  .links a { text-decoration: none; color: var(--ink-2); }
+  .links a:hover { color: var(--ink); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; border-radius: 999px; font-weight: 600; font-size: 15px; text-decoration: none; border: 0; cursor: pointer; transition: transform .15s; }
+  .btn:hover { transform: translateY(-1px); }
+  .btn.primary { background: linear-gradient(135deg, #FF8A4C, var(--ember) 50%, var(--pink)); color: #fff; box-shadow: 0 8px 24px rgba(255, 107, 74, .35); }
+  .btn.ghost { background: var(--bg-2); color: var(--ink); border: 1px solid var(--line); }
+  .btn.sm { padding: 9px 16px; font-size: 14px; }
+
+  /* Hero */
+  .hero { padding: 72px 0 40px; text-align: center; position: relative; overflow: hidden; }
+  .hero::before { content: ''; position: absolute; inset: -40% -10% auto; height: 620px; background: radial-gradient(closest-side, rgba(255, 140, 90, .28), transparent), radial-gradient(closest-side at 70% 40%, rgba(240, 80, 140, .18), transparent); z-index: -1; }
+  .hero h1 { font-size: clamp(40px, 7vw, 76px); font-weight: 800; max-width: 900px; margin: 0 auto; }
+  .hero h1 span { background: var(--hero); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero .lead { font-size: clamp(17px, 2vw, 20px); max-width: 640px; margin: 22px auto 30px; }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .shot { border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--line); background: var(--bg-2); }
+  .shot .bar { height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 12px; background: var(--bg-2); border-bottom: 1px solid var(--line); }
+  .shot .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+  .hero .shot { max-width: 1000px; margin: 56px auto 0; }
+  .platforms { display: flex; justify-content: center; gap: 10px 26px; flex-wrap: wrap; margin-top: 26px; font-size: 14px; font-weight: 600; color: var(--ink-3); }
+
+  /* Stats */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 48px 0; }
+  .stat { background: var(--bg-2); border: 1px solid var(--line); border-radius: 18px; padding: 22px; }
+  .stat b { display: block; font-family: var(--display); font-size: 34px; font-weight: 800; }
+  .stat span { font-size: 14px; color: var(--ink-2); }
+
+  /* Features */
+  section { padding: 72px 0; }
+  .center { text-align: center; max-width: 720px; margin: 0 auto 48px; }
+  .center p { margin-top: 14px; font-size: 18px; }
+  .feature { display: grid; grid-template-columns: 1fr 1.35fr; gap: 56px; align-items: center; margin-bottom: 96px; }
+  .feature:nth-of-type(even) { grid-template-columns: 1.35fr 1fr; }
+  .feature:nth-of-type(even) .copy { order: 2; }
+  .feature .copy p { margin-top: 14px; }
+  .feature ul { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 10px; }
+  .feature li { padding-left: 28px; position: relative; color: var(--ink-2); font-size: 16px; }
+  .feature li::before { content: ''; position: absolute; left: 0; top: 7px; width: 16px; height: 16px; border-radius: 50%; background: var(--c, var(--ember)); opacity: .9; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8'/%3E%3C/svg%3E"); }
+  .tag { display: inline-block; font-size: 13px; font-weight: 600; padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c); margin-bottom: 14px; }
+
+  /* Auto */
+  .auto { background: var(--bg-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: var(--bg); border: 1px solid var(--line); border-radius: 18px; padding: 24px; }
+  .card h3 { font-size: 18px; margin-bottom: 8px; }
+  .card p { font-size: 15px; }
+  .dot { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; margin-bottom: 14px; color: #fff; font-family: var(--display); font-weight: 800; font-size: 18px; }
+
+  /* Download */
+  .dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .dl .card { display: flex; flex-direction: column; gap: 10px; background: var(--bg-2); }
+  .dl .card p { flex: 1; }
+  .dl small { font-size: 13px; color: var(--ink-3); }
+
+  /* Privacy */
+  .privacy { background: var(--hero); color: #fff; border-radius: 28px; padding: 56px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 40px; align-items: center; }
+  .privacy p { color: rgba(255, 255, 255, .9); margin-top: 14px; }
+  .privacy ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  .privacy li { background: rgba(255, 255, 255, .16); border-radius: 14px; padding: 14px 18px; font-weight: 600; }
+  .privacy .btn { margin-top: 24px; background: #fff; color: var(--ink); }
+
+  /* FAQ */
+  details { border-bottom: 1px solid var(--line); padding: 20px 0; }
+  summary { font-family: var(--display); font-weight: 700; font-size: 19px; cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+  summary::after { content: '+'; color: var(--ember); font-size: 24px; line-height: 1; }
+  details[open] summary::after { content: '–'; }
+  details p { margin-top: 12px; }
+  .faq { max-width: 780px; margin: 0 auto; }
+
+  footer { padding: 40px 0 56px; border-top: 1px solid var(--line); font-size: 14px; color: var(--ink-3); }
+  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  footer a { color: var(--ink-2); margin-left: 18px; }
+  .theme { background: none; border: 1px solid var(--line); border-radius: 999px; width: 38px; height: 38px; cursor: pointer; color: var(--ink-2); font-size: 16px; }
+
+  @media (max-width: 880px) {
+    .links { display: none; }
+    nav .btn { margin-left: auto; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .feature, .feature:nth-of-type(even) { grid-template-columns: 1fr; gap: 28px; margin-bottom: 72px; }
+    .feature:nth-of-type(even) .copy { order: 0; }
+    .grid3, .dl { grid-template-columns: 1fr; }
+    .privacy { grid-template-columns: 1fr; padding: 32px 24px; }
+    section { padding: 56px 0; }
+    .hero { padding-top: 48px; }
+    footer a { margin: 0 18px 0 0; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <nav class="wrap">
+    <a class="brand" href="#"><img src="img/icon.png" alt="">Ascend</a>
+    <div class="links"><a href="#features">Features</a><a href="#automatic">Logs itself</a><a href="#download">Download</a><a href="#faq">FAQ</a></div>
+    <button class="theme" id="theme" aria-label="Switch light or dark">◐</button>
+    <a class="btn primary sm" href="#download">Get Ascend</a>
+  </nav>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="wrap">
+      <div class="eyebrow">For students in exam season</div>
+      <h1>Study hard. Sleep enough. <span>Keep climbing.</span></h1>
+      <p class="lead">Ascend plans your revision, tracks your question banks and mock tests, and reads your sleep, workouts and Anki reviews on its own. You spend 2 minutes a day on it, not 20.</p>
+      <div class="cta">
+        <a class="btn primary" href="#download">Download for free</a>
+        <a class="btn ghost" href="../">Open the web app</a>
+      </div>
+      <div class="platforms"><span>Windows</span><span>Android</span><span>iPad and web</span><span>Free, no account</span></div>
+      <div class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/01-today.png" alt="The Ascend Today screen: a greeting, a 61-day streak, today's targets and a focus timer" width="1366" height="768"></div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="stats">
+      <div class="stat"><b>2 min</b><span>a day: a morning check-in and an evening line</span></div>
+      <div class="stat"><b>6+</b><span>sources it reads on its own, from Health Connect to Anki</span></div>
+      <div class="stat"><b>3</b><span>devices kept in sync through your own Google Drive</span></div>
+      <div class="stat"><b>0</b><span>accounts, ads or trackers</span></div>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="center">
+        <div class="eyebrow">What it does</div>
+        <h2>One plan for your exam, your body and your week</h2>
+        <p>Most planners make you do the logging. Ascend fills in what it can see and asks you only for what it can't.</p>
+      </div>
+
+      <div class="feature">
+        <div class="copy">
+          <span class="tag" style="--c: var(--ember)">Today</span>
+          <h3>Start every day knowing the one thing that matters</h3>
+          <p>A 2-minute morning check-in sets three targets, a minimum win and a stretch goal. The rest of the day is a focus timer and a checklist.</p>
+          <ul style="--c: var(--ember)">
+            <li>If-then reminders at the times you planned, not generic nudges</li>
+            <li>Two reserve days a week, so one bad day doesn't break your streak</li>
+            <li>A plain focus timer that logs hours to your goals</li>
+          </ul>
+        </div>
+        <div class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/01-today.png" alt="Today screen with targets, focus timer and recovery" loading="lazy" width="1366" height="768"></div>
+      </div>
+
+      <div class="feature">
+        <div class="copy">
+          <span class="tag" style="--c: var(--violet)">Exams</span>
+          <h3>Revision that schedules itself to your exam date</h3>
+          <p>Add your subjects and topics. Ascend spaces revisions so they finish before the exam, and tells you each morning what is due.</p>
+          <ul style="--c: var(--violet)">
+            <li>Spaced revision that tightens as the exam gets closer</li>
+            <li>QBank log by subject and topic, with accuracy trends</li>
+            <li>Grand test scores with NEET and INI-CET marking</li>
+            <li>Everything copied to a Google Sheet, one tab per subject</li>
+          </ul>
+        </div>
+        <div class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/02-exams.png" alt="Exams screen with a 42-day countdown, today's revisions and subject progress" loading="lazy" width="1366" height="768"></div>
+      </div>
+
+      <div class="feature">
+        <div class="copy">
+          <span class="tag" style="--c: var(--teal)">Health</span>
+          <h3>Sleep, recovery and training from your watch</h3>
+          <p>Ascend reads Health Connect and intervals.icu to work out how much sleep you actually need, how recovered you are and how hard to train today.</p>
+          <ul style="--c: var(--teal)">
+            <li>Personal sleep need, sleep debt and sleep stages</li>
+            <li>Recovery from your heart rate variability and resting heart rate</li>
+            <li>An early warning when your overnight heart rate climbs</li>
+            <li>Race predictions and training load from your runs</li>
+          </ul>
+        </div>
+        <div class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/04-health-training.png" alt="Health screen with sleep, recovery and strain rings and advice" loading="lazy" width="1366" height="768"></div>
+      </div>
+
+      <div class="feature">
+        <div class="copy">
+          <span class="tag" style="--c: var(--pink)">Healthspan</span>
+          <h3>See how your habits move your biological age</h3>
+          <p>An estimate of your body's age from months of sleep, fitness and activity, with the single change that would help most.</p>
+          <ul style="--c: var(--pink)">
+            <li>Pace of aging from the last 30 days</li>
+            <li>Your biggest opportunity, in years</li>
+            <li>Body composition and lab results in one place</li>
+          </ul>
+        </div>
+        <div class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/05-healthspan.png" alt="Healthspan screen showing a biological age of 23.3 and the biggest opportunity" loading="lazy" width="1366" height="768"></div>
+      </div>
+
+      <div class="feature">
+        <div class="copy">
+          <span class="tag" style="--c: #E8930C">Goals</span>
+          <h3>Goals and habits for every part of your life</h3>
+          <p>Set a season of 6 to 12 weeks. Each goal shows whether you are on pace, and habits with a data source tick themselves.</p>
+          <ul style="--c: #E8930C">
+            <li>Study, health, mind, hobbies and people</li>
+            <li>Habits that count a single miss as a dip, not a reset</li>
+            <li>Weekly priorities linked to the goal they move</li>
+          </ul>
+        </div>
+        <div class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/03-goals.png" alt="Goals screen with a season chart of six goals against the pace line" loading="lazy" width="1366" height="768"></div>
+      </div>
+
+      <div class="feature">
+        <div class="copy">
+          <span class="tag" style="--c: #8B4C9E">Journal</span>
+          <h3>A short evening journal and a weekly review</h3>
+          <p>The journal already knows what you did today, so you only write what it can't see. Once a week, review the week and set three priorities.</p>
+          <ul style="--c: #8B4C9E">
+            <li>One prompt a night, with today's numbers filled in</li>
+            <li>Weekly review that moves to history once it's done</li>
+            <li>Insights that only show patterns that hold up statistically</li>
+          </ul>
+        </div>
+        <div class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/06-journal.png" alt="Journal screen with mood buttons, a prompt and a writing area" loading="lazy" width="1366" height="768"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="auto" id="automatic">
+    <div class="wrap">
+      <div class="center">
+        <div class="eyebrow">Logs itself</div>
+        <h2>Connect once, then stop typing</h2>
+        <p>Everything is optional. Connect what you already use and Ascend reads it on every sync.</p>
+      </div>
+      <div class="grid3">
+        <div class="card"><div class="dot" style="background:#0E9AA7">♥</div><h3>Health Connect</h3><p>Sleep and its stages, heart rate, HRV, steps, workouts, weight, body fat and meals from your watch or phone (Android).</p></div>
+        <div class="card"><div class="dot" style="background:#FF6B4A">⚡</div><h3>intervals.icu</h3><p>Runs, rides and gym sessions with heart rate zones, training load and fitness trends.</p></div>
+        <div class="card"><div class="dot" style="background:#5A3CF0">A</div><h3>Anki</h3><p>Your daily review count, read straight from Anki on your laptop. Your Anki habit ticks itself.</p></div>
+        <div class="card"><div class="dot" style="background:#12A15B">G</div><h3>Google Drive, Sheets and Calendar</h3><p>Sync between devices, a revision sheet per subject, and your calendar events on Today.</p></div>
+        <div class="card"><div class="dot" style="background:#1F1530">N</div><h3>Notion</h3><p>Send each journal entry to a Notion page you choose.</p></div>
+        <div class="card"><div class="dot" style="background:#E8930C">📖</div><h3>Goodreads, Chess.com, Lichess</h3><p>Books finished and games played count toward your hobby goals.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <div class="center">
+        <div class="eyebrow">Download</div>
+        <h2>Free on your laptop, phone and tablet</h2>
+        <p>Use one device or all three. They stay in sync through a Google Drive file that belongs to you.</p>
+      </div>
+      <div class="dl">
+        <div class="card">
+          <h3>Windows</h3>
+          <p>The full app, with Anki, reminders and the focus timer in the system tray.</p>
+          <a class="btn primary" href="download/Ascend-Setup-1.9.1.exe" download>Download for Windows</a>
+          <small>Version 1.9.1 · 88 MB · Windows 10 or 11. Windows may warn that the installer is from an unknown publisher: choose More info, then Run anyway.</small>
+        </div>
+        <div class="card">
+          <h3>iPad and web</h3>
+          <p>Runs in the browser and works offline. On iPad, open it in Safari, tap Share, then Add to Home Screen.</p>
+          <a class="btn ghost" href="../">Open the web app</a>
+          <small>No install needed. Health Connect needs the Android app.</small>
+        </div>
+        <div class="card">
+          <h3>Android</h3>
+          <p>Adds Health Connect, so sleep, workouts, steps and meals arrive on their own.</p>
+          <span class="btn ghost" aria-disabled="true" style="opacity:.6;cursor:default">Coming soon</span>
+          <small>Not on Google Play yet.</small>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="privacy">
+        <div>
+          <div class="eyebrow" style="color:#fff;opacity:.85">Private by design</div>
+          <h2>Your data never touches our servers. There aren't any.</h2>
+          <p>Ascend has no accounts and no backend. Your data lives on your devices and, if you turn on sync, in a file in your own Google Drive.</p>
+          <a class="btn" href="../privacy.html">Read the privacy policy</a>
+        </div>
+        <ul>
+          <li>No sign-up, no email needed</li>
+          <li>No ads, analytics or trackers</li>
+          <li>Daily backups on your own device</li>
+          <li>Disconnect any service in one tap</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="center"><div class="eyebrow">FAQ</div><h2>Questions</h2></div>
+      <div class="faq">
+        <details><summary>Is Ascend free?</summary><p>Yes. No subscriptions, no ads and no paid tier.</p></details>
+        <details><summary>Do I need a smartwatch?</summary><p>No. Without one, you enter sleep hours in the morning check-in and log workouts by hand. With a watch that writes to Health Connect, such as Zepp, Samsung or Fitbit, it fills in on its own.</p></details>
+        <details><summary>How does sync work?</summary><p>You copy a small Google Apps Script into your own Google account. Each device syncs to a file in your Google Drive through it. Nobody else, including the developer, can see that file.</p></details>
+        <details><summary>Is it only for medical students?</summary><p>The exam tools, QBank tracker and grand test marking were built for NEET PG, INI-CET and professional exams, but revision planning works for any exam. Goals, habits, health and journal work for anyone.</p></details>
+        <details><summary>How is my sleep need worked out?</summary><p>It starts from 7 or 7.5 hours, then adjusts from your own nights: how long you sleep when you wake without an alarm, and how your heart rate variability recovers after longer nights.</p></details>
+        <details><summary>Is the health advice medical advice?</summary><p>No. Ascend shows trends from your own data and general training guidance. Talk to a doctor about anything that worries you.</p></details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Ascend</span>
+    <span><a href="../privacy.html">Privacy</a><a href="../">Web app</a><a href="#download">Download</a></span>
+  </div>
+</footer>
+
+<script>
+  // Light or dark, remembered on this device
+  const root = document.documentElement;
+  try { const t = localStorage.getItem('ascend-site-theme'); if (t) root.dataset.theme = t; } catch {}
+  document.getElementById('theme').addEventListener('click', () => {
+    const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = dark ? 'light' : 'dark';
+    try { localStorage.setItem('ascend-site-theme', root.dataset.theme); } catch {}
+  });
+</script>
+</body>
+</html>
