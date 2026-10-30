@@ -544,6 +544,7 @@ function viewToday() {
     <button class="btn ghost" data-go="journal">${icon('journal')}Reflect</button>
     ${D.reserve && D.reserve[t] ? '' : reservesUsed(t) < RESERVE_PER_WEEK ? `<button class="btn ghost" data-act="reserve-day" title="Protects streaks and targets for today. 2 a week.">${icon('bed')}Reserve day</button>` : ''}
   </div>
+  ${typeof restartCard === 'function' ? restartCard() : ''}
   ${D.reserve && D.reserve[t] ? `<div class="carry reserve-banner"><p><b>Reserve day.</b> Habits, streaks and tomorrow's QBank target are protected. ${RESERVE_PER_WEEK - reservesUsed(t)} left this week.</p><button class="btn sm ghost" data-act="reserve-day">Undo</button></div>` : resting(t) ? `<div class="carry reserve-banner"><p><b>Rest mode until ${shortDay(D.settings.restUntil)}.</b> Habits and reminders are paused.</p><button class="btn sm ghost" data-go="settings">Change</button></div>` : ''}
 
   <div class="grid g-main">

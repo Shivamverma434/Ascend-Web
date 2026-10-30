@@ -129,12 +129,58 @@ function sleepKitCard() {
     ${light ? '' : `<button class="btn ghost sm" data-act="light-habit" style="margin-top:8px">${icon('sun')}Add a morning-light habit</button>`}</section>`;
 }
 
+// ---------- Restart after lost days ----------
+// A day "counted" if any real work happened: 30+ minutes of focus, 20+ QBank questions, 30+ Anki reviews, an exam
+// topic learned or revised, two targets done, or a workout. Reserve and rest days are planned, so they are neither.
+function dayCounted(d) {
+  const tg = ((D.days[d] || {}).targets || []).filter(x => x.done).length;
+  const qb = typeof qbSum === 'function' ? qbSum(qbOn(d)).n : 0;
+  const anki = (D.anki && D.anki.days && D.anki.days[d]) || 0;
+  const topic = typeof touchedOn === 'function' && (D.exams || []).some(ex => (typeof allTopics === 'function' ? allTopics(ex) : []).some(x => touchedOn(x.tp, d)));
+  return focusMinOn(d) >= 30 || qb >= 20 || anki >= 30 || topic || tg >= 2 || workoutsOn(d).length > 0;
+}
+// How many days in a row, up to yesterday, nothing counted
+function lostRun(t = todayStr()) {
+  const start = D.season.start || addDays(t, -14);
+  let n = 0;
+  for (let d = addDays(t, -1); n < 14 && d >= start; d = addDays(d, -1)) { if (offDay(d) || dayCounted(d)) break; n++; }
+  return n;
+}
+// The smallest real step back in: the oldest overdue revision, then today's first open target, then Anki
+function restartStep() {
+  const ex = typeof nextExam === 'function' ? nextExam() : null;
+  if (ex) { const p = examPlan(ex); const x = p.due[0] || p.learn[0]; if (x) return { task: `${p.due[0] ? 'Revise' : 'Start'} ${x.tp.name}`, why: p.due[0] ? `${x.s.name}: the oldest of ${p.due.length} revisions due. The rest can wait.` : `The next topic in your ${ex.name} plan` }; }
+  const tg = (day(todayStr()).targets || []).find(x => !x.done);
+  if (tg) return { task: tg.title, why: 'Your first open target' };
+  return { task: 'Anki reviews', why: 'Clear what is due' };
+}
+function restartCard() {
+  const t = todayStr(), n = lostRun(t);
+  if (!n || dayCounted(t) || offDay(t) || D.activeSession) return '';
+  const st = restartStep(), bed = fmtHM(D.settings.bedTime || '00:30');
+  return `<section class="panel restart">
+    <div class="restart-head">${icon('sun', 'style="width:20px;height:20px"')}<div><h3>${n === 1 ? 'Yesterday got away. Restart small.' : `${n} days off the plan. Restart with one block.`}</h3>
+      <p class="muted">Don't plan the whole comeback. The backlog waits; one block today breaks the run.</p></div></div>
+    <ol class="restart-steps">
+      <li><b>25 minutes: ${esc(st.task)}</b><span>${esc(st.why)}</span></li>
+      <li><b>Then 20 QBank questions or your Anki reviews</b><span>That is a day that counts</span></li>
+      <li><b>Lights out by ${bed}</b><span>Tomorrow starts tonight</span></li>
+    </ol>
+    <div class="row wrap" style="gap:8px">
+      <button class="btn primary" data-act="restart-go" data-task="${esc(st.task)}">${icon('play')}Start 25 minutes now</button>
+      ${carryOver() ? '<button class="btn ghost" data-act="restart-clear">Clear the old unfinished list</button>' : ''}
+    </div>
+  </section>`;
+}
+
 // ---------- Events ----------
 document.addEventListener('click', (e) => {
   const a = e.target.closest('[data-act]'); if (!a) return;
   switch (a.dataset.act) {
     case 'reserve-day': if (D.reserve && D.reserve[todayStr()] || confirmInline(a, 'Use one?')) toggleReserve(); break;
     case 'habit-skip': toggleSkip(a.dataset.goal, a.dataset.d || todayStr()); break;
+    case 'restart-go': { const ex = typeof nextExam === 'function' && nextExam(); const g = ex && activeGoals().find(x => /exam|prof|study/i.test(x.name)); startSession(a.dataset.task, g ? g.id : '', 25); break; }
+    case 'restart-clear': D.dismissedCarry = todayStr(); save(); toast('Cleared. Today is a clean list.'); rerender(); break;
     case 'win-mark': { const ci = day(todayStr()).checkin; if (!ci) return; ci[a.dataset.k] = !ci[a.dataset.k]; save(); if (ci[a.dataset.k]) { burst(a); chime('done'); } rerender(); break; }
     case 'bed-step': D.settings.bedTime = a.dataset.to; D.settings.bedStepAt = todayStr(); save(); toast(`Lights out is now ${fmtHM(a.dataset.to)}. The reminder and coffee cut-off moved with it.`); rerender(); break;
     case 'light-habit': {

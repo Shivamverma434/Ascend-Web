@@ -57,8 +57,14 @@ function personalNeed() {
     const T = todayStr(), days = range(addDays(T, -90), T);
     const wakes = days.map(wakeMin).filter(v => v != null);
     const anchor = wakes.length >= 14 ? medianOf(wakes) : hhmmMin(D.settings.wakeTime || '08:00');
+    // A sleep-in is waking late after a normal bedtime. Waking late because you went to bed late says nothing about
+    // how much sleep you need, so those mornings don't count.
+    const beds = days.map(bedMin).filter(v => v != null), usualBed = beds.length >= 14 ? medianOf(beds) : null;
     const free = [];
-    for (const d of days) { const w = wakeMin(d), prevW = wakeMin(addDays(d, -1)); if (w != null && w > anchor + 60 && prevW != null && prevW > anchor + 60) { const h = sleepHours(d); if (h) free.push(h); } }
+    for (const d of days) {
+      const w = wakeMin(d), prevW = wakeMin(addDays(d, -1)), b = bedMin(d);
+      if (w != null && w > anchor + 60 && prevW != null && prevW > anchor + 60 && (usualBed == null || (b != null && b <= usualBed + 30))) { const h = sleepHours(d); if (h) free.push(h); }
+    }
     const pairs = days.map(d => [sleepHours(d), (wellnessOn(d) || {}).hrv]).filter(([h, v]) => h && v > 0).map(([h, v]) => [h, Math.log(v)]);
     let rec = null;
     if (pairs.length >= 20) {
@@ -115,12 +121,17 @@ readiness = function (date = todayStr()) {
   }
   if (c.energy) parts.push({ key: 'feel', label: 'How you feel', v: (c.energy - 1) * 25, w: .1, note: `energy ${c.energy}/5` });
   if (!parts.some(p => p.key === 'sleep' || p.key === 'hrv')) return null;
-  const score = Math.round(sum(parts, p => p.v * p.w) / sum(parts, p => p.w));
+  // One good night should not outvote a week of warning signs: a low HRV trend, overnight heart rate well above usual,
+  // or 5+ hours of sleep debt each hold the score below Primed.
+  const holds = [hb.state === 'low' ? 'your HRV has been below its normal band all week' : '', rh && rh.z >= 2 ? 'your overnight heart rate is well above usual' : '', sleepDebt(date) >= 5 ? `you carry ${sleepDebt(date)} h of sleep debt` : ''].filter(Boolean);
+  let score = Math.round(sum(parts, p => p.v * p.w) / sum(parts, p => p.w));
+  if (holds.length) score = Math.min(score, 60);
   const band = score >= 67 ? { key: 'push', label: 'Primed', color: '#2FA36B', advice: 'Your body is ready. A good day for your hardest session.' }
     : score >= 50 ? { key: 'steady', label: 'Steady', color: '#D9A21B', advice: 'Normal training is fine. Keep intensity moderate.' }
     : score >= 34 ? { key: 'easy', label: 'Take it easy', color: '#F0A030', advice: 'Go light: an easy run, a walk or mobility work.' }
     : { key: 'rest', label: 'Recover', color: '#E5484D', advice: 'Recovery day. Rest, walk, stretch and sleep early.' };
-  return { score, band, parts };
+  if (holds.length && score === 60) band.advice += ` Held below Primed because ${holds.join(' and ')}.`;
+  return { score, band, parts, holds };
 };
 
 // ---------- 5. Overnight strain watch (adapted from NightSignal; never names an illness) ----------

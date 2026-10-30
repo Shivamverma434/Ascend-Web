@@ -295,17 +295,26 @@ async function fetchChess(site, user) {
   return { site, user, best: best || null, days, at: Date.now() };
 }
 function goodreadsId(link) { const m = String(link || '').match(/(?:user\/show|review\/list(?:_rss)?)\/(\d+)/) || String(link || '').match(/^\s*(\d+)\s*$/); return m ? m[1] : ''; }
+// Goodreads switched off its shelf feeds (RSS) for everyone in late October 2026. The public profile page still shows
+// how many books are on your read shelf and what you are reading now, so a finished book is noticed as the read count
+// going up, named after the book that just left "currently reading" and dated the day Ascend saw it.
 async function fetchBooks(link) {
   const id = goodreadsId(link); if (!id) throw new Error('Paste your Goodreads profile link, like goodreads.com/user/show/12345-name');
-  const xml = await webText(`https://www.goodreads.com/review/list_rss/${id}?shelf=read&per_page=200`, 'application/rss+xml');
-  const doc = new DOMParser().parseFromString(xml, 'text/xml');
-  const list = [...doc.querySelectorAll('item')].map(it => {
-    const txt = (sel) => (it.querySelector(sel) || {}).textContent || '';
-    const when = txt('user_read_at') || txt('user_date_added') || txt('pubDate');
-    const d = when ? new Date(when) : null;
-    return { title: txt('title').trim(), author: txt('author_name').trim(), date: d && !isNaN(d) ? todayStr(d) : '' };
-  }).filter(b => b.title && b.date);
-  return { id, list: list.slice(0, 200), at: Date.now() };
+  const html = await webText(`https://www.goodreads.com/user/show/${id}`, 'text/html');
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const shelf = [...doc.querySelectorAll('a.userShowPageShelfListItem')].find(a => /[?&]shelf=read$/.test(a.getAttribute('href') || ''));
+  const m = shelf && shelf.textContent.replace(/,/g, '').match(/\((\d+)\)/);
+  if (!m) throw new Error('your read shelf is not public. On Goodreads: Settings › Privacy › let anyone see your profile');
+  const readCount = Number(m[1]);
+  const reading = [...doc.querySelectorAll('#currentlyReadingReviews .Updates')].map(u => ({
+    title: ((u.querySelector('a.bookTitle') || {}).textContent || '').trim(), author: ((u.querySelector('a.authorName') || {}).textContent || '').trim()
+  })).filter(b => b.title);
+  const prev = (D.links && D.links.books) || {}, list = Array.isArray(prev.list) ? prev.list.slice() : [];
+  if (prev.readCount != null && readCount > prev.readCount) {
+    const finished = (prev.reading || []).filter(b => !reading.some(r => r.title === b.title));
+    for (let i = 0; i < readCount - prev.readCount; i++) list.unshift({ title: (finished[i] || {}).title || 'A book from your read shelf', author: (finished[i] || {}).author || '', date: todayStr() });
+  }
+  return { id, list: list.slice(0, 300), readCount, reading, at: Date.now() };
 }
 async function fetchCalendarGoals() {
   const gs = activeGoals().filter(g => g.metric === 'calendar' && g.keyword);
@@ -353,8 +362,8 @@ function lifeLinksPanel() {
       <div class="field grow"><label>Chess username</label><input class="input" name="chessUser" value="${esc(s.chessUser || '')}" placeholder="Leave empty if you don't play" autocomplete="off"></div></div>
     ${c ? `<p class="muted" style="font-size:12.5px;margin:-4px 0 10px">${icon('knight', 'style="width:13px;height:13px;vertical-align:-2px"')} ${c.best ? 'Best rating ' + c.best + ' · ' : ''}${chessGamesIn(addDays(todayStr(), -29), todayStr())} games in the last 30 days · updated ${ago(c.at)}</p>` : ''}
     <div class="field"><label>Goodreads profile link</label><input class="input" name="goodreadsUrl" value="${esc(s.goodreadsUrl || '')}" placeholder="https://www.goodreads.com/user/show/12345-your-name" autocomplete="off">
-      <span class="hint">Your "read" shelf must be public. ${window.ASCEND_WEB ? 'Goodreads is read on your laptop or phone and synced here.' : ''}</span></div>
-    ${b ? `<p class="muted" style="font-size:12.5px;margin:-4px 0 10px">${icon('book', 'style="width:13px;height:13px;vertical-align:-2px"')} ${b.list.length} books on your read shelf · latest: ${esc((b.list[0] || {}).title || '–')} · updated ${ago(b.at)}</p>` : ''}
+      <span class="hint">Your profile must be public. A book counts as finished on the day Ascend sees your read shelf grow. ${window.ASCEND_WEB ? 'Goodreads is read on your laptop or phone and synced here.' : ''}</span></div>
+    ${b ? `<p class="muted" style="font-size:12.5px;margin:-4px 0 10px">${icon('book', 'style="width:13px;height:13px;vertical-align:-2px"')} ${b.readCount != null ? b.readCount : b.list.length} books read${b.reading && b.reading.length ? ` · reading ${esc(b.reading.map(r => r.title.split(':')[0]).join(', '))}` : ` · latest: ${esc((b.list[0] || {}).title || '–')}`} · updated ${ago(b.at)}</p>` : ''}
     <p class="hint muted" style="font-size:12px">Google Calendar time: create a goal tracked by "Time in Google Calendar" with a keyword like Guitar or Gym. Events with that word in the title count, from every calendar you show in Google Calendar.</p>
     ${LINKS.error ? `<p style="font-size:12.5px;color:var(--off)">${esc(LINKS.error)}</p>` : ''}
   </section>`;

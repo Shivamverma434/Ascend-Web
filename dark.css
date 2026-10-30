@@ -100,3 +100,23 @@
 [data-theme="dark"] .coach-pill.selected, [data-theme="dark"] .btn.dark, [data-theme="dark"] .ci-num { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 [data-theme="dark"] .tip, [data-theme="dark"] .prompt-card { background: #352839; color: var(--ink); }
 [data-theme="dark"] .qs-sweep .qs-text { background-image: linear-gradient(90deg, var(--ink) 45%, var(--c) 50%, transparent 55%); }
+
+/* More surfaces painted with the text colour. In dark mode that colour is light, so these become fixed deep plum,
+   and anything that put white text on it now uses dark text instead. */
+[data-theme="dark"] .review-hero { background: linear-gradient(135deg, #1B1220, #6B2E63 60%, #B0487A); }
+[data-theme="dark"] .review-hero .stat.accent b, [data-theme="dark"] .review-hero .stat.accent { color: #2B1D2E; }
+[data-theme="dark"] .review-hero .stat.accent span { color: #6B4A00; }
+[data-theme="dark"] .stat.accent, [data-theme="dark"] .review-hero .stat.accent { background: linear-gradient(135deg, #FFC24B, #FFD98A); color: #2B1D2E; }
+[data-theme="dark"] .stat.accent span, [data-theme="dark"] .stat.accent .muted { color: #6B4A00; }
+[data-theme="dark"] .hstat.hot { color: #2B1D2E; }
+[data-theme="dark"] .hstat.hot span { color: #6B4A00; }
+[data-theme="dark"] .timer-wrap { background: #1B1220; }
+[data-theme="dark"] .timer-wrap.running { background: radial-gradient(100% 90% at 50% 0%, #5B2A5C 0%, #1B1220 70%); }
+[data-theme="dark"] .notion-cta { background: linear-gradient(135deg, #1B1220, #6B2E63); }
+[data-theme="dark"] .prompt-card { background: linear-gradient(135deg, #2A1D30, #5B2A5C); color: #fff; }
+[data-theme="dark"] .toast, [data-theme="dark"] .celebrate .card { background: #352839; color: var(--ink); }
+[data-theme="dark"] .type-picker button.on, [data-theme="dark"] .mood button.on, [data-theme="dark"] .beh-chips button.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+[data-theme="dark"] .tt-next.due { color: #FF9A7A; }
+[data-theme="dark"] .ex-topic.due, [data-theme="dark"] .time-chip, [data-theme="dark"] .target .time-chip { color: #FF9A7A; }
+[data-theme="dark"] .src-badge { color: #6FD6DE; background: #15343A; }
+[data-theme="dark"] .vital-flag { color: #FFB38A; }
