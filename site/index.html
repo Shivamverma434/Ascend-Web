@@ -92,7 +92,7 @@
   .dot { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; margin-bottom: 14px; color: #fff; font-family: var(--display); font-weight: 800; font-size: 18px; }
 
   /* Download */
-  .dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .dl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; max-width: 820px; margin: 0 auto; }
   .dl .card { display: flex; flex-direction: column; gap: 10px; background: var(--bg-2); }
   .dl .card p { flex: 1; }
   .dl small { font-size: 13px; color: var(--ink-3); }
@@ -150,9 +150,9 @@
       <p class="lead">Ascend plans your revision, tracks your question banks and mock tests, and reads your sleep, workouts and Anki reviews on its own. You spend 2 minutes a day on it, not 20.</p>
       <div class="cta">
         <a class="btn primary" href="#download">Download for free</a>
-        <a class="btn ghost" href="../">Open the web app</a>
+        <a class="btn ghost" href="#features">See what it does</a>
       </div>
-      <div class="platforms"><span>Windows</span><span>Android</span><span>iPad and web</span><span>Free, no account</span></div>
+      <div class="platforms"><span>Windows</span><span>Android</span><span>Free, no account</span></div>
       <div class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/01-today.png" alt="The Ascend Today screen: a greeting, a 61-day streak, today's targets and a focus timer" width="1366" height="768"></div>
     </div>
   </div>
@@ -161,7 +161,7 @@
     <div class="stats">
       <div class="stat"><b>2 min</b><span>a day: a morning check-in and an evening line</span></div>
       <div class="stat"><b>6+</b><span>sources it reads on its own, from Health Connect to Anki</span></div>
-      <div class="stat"><b>3</b><span>devices kept in sync through your own Google Drive</span></div>
+      <div class="stat"><b>2</b><span>devices, laptop and phone, kept in sync through your own Google Drive</span></div>
       <div class="stat"><b>0</b><span>accounts, ads or trackers</span></div>
     </div>
   </div>
@@ -196,7 +196,7 @@
           <ul style="--c: var(--violet)">
             <li>Spaced revision that tightens as the exam gets closer</li>
             <li>QBank log by subject and topic, with accuracy trends</li>
-            <li>Grand test scores with NEET and INI-CET marking</li>
+            <li>Grand test scores with negative marking, the way your exam scores them</li>
             <li>Everything copied to a Google Sheet, one tab per subject</li>
           </ul>
         </div>
@@ -284,27 +284,21 @@
     <div class="wrap">
       <div class="center">
         <div class="eyebrow">Download</div>
-        <h2>Free on your laptop, phone and tablet</h2>
-        <p>Use one device or all three. They stay in sync through a Google Drive file that belongs to you.</p>
+        <h2>Free on your laptop and phone</h2>
+        <p>Use one or both. They stay in sync through a Google Drive file that belongs to you, and each tells you when a new version is out.</p>
       </div>
       <div class="dl">
         <div class="card">
           <h3>Windows</h3>
           <p>The full app, with Anki, reminders and the focus timer in the system tray.</p>
-          <a class="btn primary" href="download/Ascend-Setup-1.9.3.exe" download>Download for Windows</a>
-          <small>Version 1.9.3 · 88 MB · Windows 10 or 11. Windows may warn that the installer is from an unknown publisher: choose More info, then Run anyway.</small>
-        </div>
-        <div class="card">
-          <h3>iPad and web</h3>
-          <p>Runs in the browser and works offline. On iPad, open it in Safari, tap Share, then Add to Home Screen.</p>
-          <a class="btn ghost" href="../">Open the web app</a>
-          <small>No install needed. Health Connect needs the Android app.</small>
+          <a class="btn primary" href="download/Ascend-Setup-1.9.4.exe" download>Download for Windows</a>
+          <small>Version 1.9.4 · 88 MB · Windows 10 or 11. Windows may warn that the installer is from an unknown publisher: choose More info, then Run anyway.</small>
         </div>
         <div class="card">
           <h3>Android</h3>
           <p>Adds Health Connect, so sleep, workouts, steps and meals arrive on their own.</p>
-          <a class="btn primary" href="download/Ascend-android-21.apk" download>Download for Android</a>
-          <small>Version 1.9.3 · 5 MB · Android 8 or newer (Health Connect needs Android 9 or newer). Open the file on your phone and allow your browser to install apps when asked. Not on Google Play yet.</small>
+          <a class="btn primary" href="download/Ascend-android-22.apk" download>Download for Android</a>
+          <small>Version 1.9.4 · 5 MB · Android 8 or newer (Health Connect needs Android 9 or newer). Open the file on your phone and allow your browser to install apps when asked. Not on Google Play yet.</small>
         </div>
       </div>
     </div>
@@ -336,7 +330,7 @@
         <details><summary>Is Ascend free?</summary><p>Yes. No subscriptions, no ads and no paid tier.</p></details>
         <details><summary>Do I need a smartwatch?</summary><p>No. Without one, you enter sleep hours in the morning check-in and log workouts by hand. With a watch that writes to Health Connect, such as Zepp, Samsung or Fitbit, it fills in on its own.</p></details>
         <details><summary>How does sync work?</summary><p>You copy a small Google Apps Script into your own Google account. Each device syncs to a file in your Google Drive through it. Nobody else, including the developer, can see that file.</p></details>
-        <details><summary>Is it only for medical students?</summary><p>The exam tools, QBank tracker and grand test marking were built for NEET PG, INI-CET and professional exams, but revision planning works for any exam. Goals, habits, health and journal work for anyone.</p></details>
+        <details><summary>Is it only for medical students?</summary><p>The exam tools, QBank tracker and grand test marking were built for medical exams, but revision planning works for any exam. Goals, habits, health and journal work for anyone.</p></details>
         <details><summary>How is my sleep need worked out?</summary><p>It starts from 7 or 7.5 hours, then adjusts from your own nights: how long you sleep when you wake without an alarm, and how your heart rate variability recovers after longer nights.</p></details>
         <details><summary>Is there a dark mode?</summary><p>Yes. In Settings, set Appearance to Dark, Light, or Match this device to follow your laptop or phone.</p></details>
         <details><summary>What if Health Connect and intervals.icu both have my data?</summary><p>Ascend keeps one copy of each night and each workout. For a run recorded by both, it keeps the intervals.icu version, which has distance and heart rate, and carries over any effort or notes you added.</p></details>
@@ -349,7 +343,7 @@
 <footer>
   <div class="wrap">
     <span>© 2026 Ascend</span>
-    <span><a href="../privacy.html">Privacy</a><a href="../">Web app</a><a href="#download">Download</a></span>
+    <span><a href="../privacy.html">Privacy</a><a href="#download">Download</a></span>
   </div>
 </footer>
 
